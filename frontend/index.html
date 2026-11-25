@@ -7,6 +7,29 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (function () {
+        function showBootError(msg) {
+          var root = document.getElementById("root");
+          if (!root || root.childElementCount > 0) return;
+          root.innerHTML =
+            '<div style="min-height:100vh;padding:2rem;background:#010409;color:#e6edf3;font-family:system-ui,sans-serif">' +
+            "<h1 style=\"font-size:1.1rem;margin:0 0 1rem\">界面未加载</h1>" +
+            '<pre style="color:#f85149;white-space:pre-wrap;font-size:0.8rem">' +
+            String(msg).replace(/</g, "&lt;") +
+            "</pre>" +
+            '<p style="color:#8b949e;font-size:0.85rem">开发模式：在 frontend 目录执行 <code>npm run dev</code> 重启（常见于 Vite HMR 卡住），再按 Ctrl+F5 强刷。</p>' +
+            "</div>";
+        }
+        window.addEventListener("error", function (e) {
+          showBootError(e.message || "未知错误");
+        });
+        window.addEventListener("unhandledrejection", function (e) {
+          var r = e.reason;
+          showBootError(r && r.message ? r.message : r);
+        });
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

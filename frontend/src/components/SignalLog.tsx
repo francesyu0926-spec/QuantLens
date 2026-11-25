@@ -60,7 +60,7 @@ export function SignalLog({
 }: Props) {
   const visible = signals
     .filter((s) => ruleEnabled(s.rule, rules, s.message))
-    .slice(0, 5);
+    .slice(0, 8);
 
   const stripHist = (msg: string) =>
     msg.replace(/^\[历史\]\s*/, "").replace(/^\[盘中预警\]\s*/, "");
@@ -71,36 +71,43 @@ export function SignalLog({
     <section className={`signal-log${className ? ` ${className}` : ""}`}>
       <header className="signal-head">
         <h2>策略信号</h2>
-        <div className="signal-head-actions">
-          <div className="signal-scope" role="group" aria-label="信号范围">
-            <button
-              type="button"
-              className={`scope-btn${scope === "current" ? " on" : ""}`}
-              onClick={() => onScopeChange("current")}
-            >
-              当前
-            </button>
-            <button
-              type="button"
-              className={`scope-btn${scope === "watchlist" ? " on" : ""}`}
-              onClick={() => onScopeChange("watchlist")}
-            >
-              自选
-            </button>
-          </div>
+        <div className="signal-scope" role="group" aria-label="信号范围">
+          <button
+            type="button"
+            className={`scope-btn${scope === "current" ? " on" : ""}`}
+            aria-pressed={scope === "current"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onScopeChange("current");
+            }}
+          >
+            当前
+          </button>
+          <button
+            type="button"
+            className={`scope-btn${scope === "watchlist" ? " on" : ""}`}
+            aria-pressed={scope === "watchlist"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onScopeChange("watchlist");
+            }}
+          >
+            自选
+          </button>
         </div>
       </header>
       <div className="log-scroll">
         {visible.length === 0 && (
           <p className="muted empty-hint">等待规则触发，或查看历史回填金叉/死叉</p>
         )}
-        {visible.map((sig) => {
+        {visible.map((sig, index) => {
           const tone = signalTone(sig.rule);
           const clickable = Boolean(onPick && sig.bar_time);
+          const fresh = index < 2;
           return (
             <article
               key={sig.id}
-              className={`signal-item signal-${tone}${clickable ? " clickable" : ""}`}
+              className={`signal-item signal-${tone}${fresh ? " signal-fresh" : " signal-muted"}${clickable ? " clickable" : ""}`}
               role={clickable ? "button" : undefined}
               tabIndex={clickable ? 0 : undefined}
               onClick={() => clickable && onPick?.(sig)}
@@ -113,6 +120,7 @@ export function SignalLog({
             >
               <div className="signal-row signal-row-top">
                 <span className="signal-msg">
+                  <span className="signal-sym-inline">{sig.symbol}</span>
                   {isLive(sig.message) && (
                     <span className="signal-new-dot" title="新触发">
                       NEW
@@ -123,7 +131,6 @@ export function SignalLog({
                 <time>{formatSignalTime(sig)}</time>
               </div>
               <div className="signal-row signal-row-bot">
-                <span className="signal-sym">{sig.symbol}</span>
                 <span className="signal-price">@{sig.price.toFixed(2)}</span>
               </div>
             </article>

@@ -8,7 +8,7 @@ from typing import Any
 from .collector import MarketCollector
 from .indicators import compute_indicators
 
-RADAR_INTERVALS = ("1m", "5m", "15m", "1h", "4h")
+RADAR_INTERVALS = ("5m", "15m", "1h", "1d", "1m", "4h")
 
 
 def _trend_from(indicators: dict[str, float]) -> str:

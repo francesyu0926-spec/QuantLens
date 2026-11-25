@@ -1,0 +1,273 @@
+import {
+  forwardRef,
+  useCallback,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { AlertSignal, Candle } from "../types/market";
+import type {
+  ChartDisplayOptions,
+  ChartLayoutMode,
+  TimeInterval,
+} from "../types/chart";
+import { INTERVALS } from "../types/chart";
+import type { PriceLineDef } from "../hooks/usePriceLines";
+import type { PriceColors } from "../utils/priceColors";
+import type { PaperTrade } from "../hooks/usePaperTrades";
+import { usePaneKlines } from "../hooks/usePaneKlines";
+import { snapCrosshairTime } from "../utils/crosshairSync";
+import type { SeriesMarker, Time } from "lightweight-charts";
+import {
+  ChartWorkspace,
+  type ChartWorkspaceHandle,
+} from "./ChartWorkspace";
+
+interface Props {
+  layout: ChartLayoutMode;
+  symbol: string;
+  primaryInterval: TimeInterval;
+  primaryCandles: Candle[];
+  signals: AlertSignal[];
+  options: ChartDisplayOptions;
+  priceLines: PriceLineDef[];
+  priceColors: PriceColors;
+  paperTrades: PaperTrade[];
+  openEntry: number | null;
+  livePrice: number;
+  onAddPriceLine: (price: number) => void;
+  patternMarkers?: SeriesMarker<Time>[];
+  autoPriceLines?: { price: number; title: string; color?: string }[];
+  activePane: number;
+  onActivePaneChange: (idx: number) => void;
+  dualIv: TimeInterval;
+  onDualIvChange: (iv: TimeInterval) => void;
+  quadIvs: TimeInterval[];
+  onQuadIvChange: (idx: number, iv: TimeInterval) => void;
+}
+
+export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function ChartPaneGrid({
+  layout,
+  symbol,
+  primaryInterval,
+  primaryCandles,
+  signals,
+  options,
+  priceLines,
+  priceColors,
+  paperTrades,
+  openEntry,
+  livePrice,
+  onAddPriceLine,
+  patternMarkers = [],
+  autoPriceLines = [],
+  activePane,
+  onActivePaneChange,
+  dualIv,
+  onDualIvChange,
+  quadIvs,
+  onQuadIvChange,
+}, ref) {
+  const [ivPickerFor, setIvPickerFor] = useState<number | null>(null);
+
+  const intervals = useMemo(() => {
+    if (layout === "single") return [primaryInterval];
+    if (layout === "dual") return [primaryInterval, dualIv];
+    return quadIvs;
+  }, [layout, primaryInterval, dualIv, quadIvs]);
+
+  const multivPane = layout !== "single";
+  const hideSubChart = multivPane;
+
+  const pane1 = usePaneKlines(
+    symbol,
+    intervals[1] ?? primaryInterval,
+    multivPane && intervals.length > 1
+  );
+  const pane2 = usePaneKlines(
+    symbol,
+    intervals[2] ?? "1h",
+    layout === "quad"
+  );
+  const pane3 = usePaneKlines(
+    symbol,
+    intervals[3] ?? "1d",
+    layout === "quad"
+  );
+
+  const extraCandles = [primaryCandles, pane1.candles, pane2.candles, pane3.candles];
+
+  const [sync, setSync] = useState<{ time: number; from: string } | null>(null);
+  const primaryRef = useRef<ChartWorkspaceHandle>(null);
+  useImperativeHandle(ref, () => ({
+    scrollToBar: (time: number) => primaryRef.current?.scrollToBar(time),
+  }));
+
+  const onCrosshair = useCallback((time: number | null, paneId: string) => {
+    if (time == null) setSync(null);
+    else setSync({ time, from: paneId });
+  }, []);
+
+  const gridClass =
+    layout === "quad"
+      ? "chart-pane-grid is-quad"
+      : layout === "dual"
+        ? "chart-pane-grid is-dual"
+        : "chart-pane-grid is-single";
+
+  const positionTitle = useMemo(() => {
+    if (openEntry == null || livePrice <= 0) return "";
+    const pnl = livePrice - openEntry;
+    const pct = (pnl / openEntry) * 100;
+    const sign = pnl >= 0 ? "+" : "";
+    return `持仓 ${openEntry.toFixed(2)} · ${sign}${pnl.toFixed(2)} (${sign}${pct.toFixed(2)}%)`;
+  }, [openEntry, livePrice]);
+
+  const pickIv = (idx: number, iv: TimeInterval) => {
+    if (layout === "quad") onQuadIvChange(idx, iv);
+    else onDualIvChange(iv);
+    setIvPickerFor(null);
+  };
+
+  if (layout === "single") {
+    return (
+      <div className="chart-pane-grid is-single">
+        {primaryCandles.length > 0 ? (
+          <ChartWorkspace
+            ref={primaryRef}
+            symbol={symbol}
+            candles={primaryCandles}
+            signals={signals}
+            options={options}
+            priceLines={priceLines}
+            priceColors={priceColors}
+            onAddPriceLine={onAddPriceLine}
+            paperTrades={paperTrades}
+            positionCostLine={
+              openEntry != null
+                ? {
+                    price: openEntry,
+                    title: positionTitle || "持仓成本",
+                  }
+                : null
+            }
+            patternMarkers={patternMarkers}
+            autoPriceLines={autoPriceLines}
+          />
+        ) : (
+          <div className="chart-pane-empty muted">加载 K 线…</div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={gridClass}
+      onClick={() => setIvPickerFor(null)}
+      onMouseLeave={() => setSync(null)}
+    >
+      {intervals.map((iv, idx) => {
+        const paneId = `pane-${iv}-${idx}`;
+        const candles = idx === 0 ? primaryCandles : extraCandles[idx] ?? [];
+        const compact = true;
+        const peerTime =
+          sync && sync.from !== paneId
+            ? snapCrosshairTime(sync.time, candles)
+            : null;
+
+        const labelIv =
+          idx === 1 && layout === "dual" ? pane1.resolvedIv : iv;
+        const paneLoading = idx === 1 && layout === "dual" && pane1.loading;
+        const paneErr = idx === 1 && layout === "dual" ? pane1.error : null;
+        const paneLoaders = [null, pane1, pane2, pane3] as const;
+        const quadLoading =
+          layout === "quad" && idx > 0 && paneLoaders[idx]?.loading;
+        const showTimeScale = layout === "quad" ? idx >= 2 : true;
+
+        const canPickIv = layout === "quad" || (layout === "dual" && idx === 1);
+
+        return (
+          <div
+            className={`chart-pane${activePane === idx ? " is-active" : ""}`}
+            key={paneId}
+            onClick={(e) => {
+              e.stopPropagation();
+              onActivePaneChange(idx);
+            }}
+          >
+            <button
+              type="button"
+              className={`chart-pane-capsule${activePane === idx ? " is-active" : ""}${
+                ivPickerFor === idx ? " is-open" : ""
+              }`}
+              title={canPickIv ? "切换本格周期" : `${symbol} · ${labelIv}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (canPickIv) {
+                  setIvPickerFor((p) => (p === idx ? null : idx));
+                } else {
+                  onActivePaneChange(idx);
+                }
+              }}
+            >
+              {symbol} · {labelIv}
+            </button>
+            {ivPickerFor === idx && canPickIv && (
+              <div
+                className="chart-pane-iv-menu"
+                role="menu"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {INTERVALS.map((si) => (
+                  <button
+                    key={si}
+                    type="button"
+                    role="menuitem"
+                    className={`chip tiny${labelIv === si ? " on" : ""}`}
+                    onClick={() => pickIv(idx, si)}
+                  >
+                    {si}
+                  </button>
+                ))}
+              </div>
+            )}
+            {candles.length > 0 ? (
+              <ChartWorkspace
+                ref={idx === 0 ? primaryRef : undefined}
+                symbol={symbol}
+                candles={candles}
+                signals={idx === 0 ? signals : []}
+                options={options}
+                priceLines={idx === 0 ? priceLines : []}
+                priceColors={priceColors}
+                onAddPriceLine={idx === 0 ? onAddPriceLine : undefined}
+                compact={compact}
+                hideSubChart={hideSubChart}
+                showTimeScale={showTimeScale}
+                paneId={paneId}
+                peerCrosshairTime={peerTime}
+                onCrosshairTime={onCrosshair}
+                paperTrades={idx === 0 ? paperTrades : []}
+                positionCostLine={
+                  idx === 0 && openEntry != null
+                    ? { price: openEntry, title: positionTitle || "持仓成本" }
+                    : null
+                }
+                patternMarkers={idx === 0 ? patternMarkers : []}
+                autoPriceLines={idx === 0 ? autoPriceLines : []}
+              />
+            ) : (
+              <div className="chart-pane-empty muted">
+                {paneLoading || quadLoading
+                  ? `加载 ${labelIv} …`
+                  : paneErr ?? `暂无 ${labelIv} 数据`}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+});

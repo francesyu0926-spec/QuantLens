@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { A_SHARE_ONLY } from "../config/market";
 import { ConnectionStatusCapsule, type ConnectionMeta } from "./ConnectionStatusCapsule";
-import type { TimeInterval } from "../types/chart";
+import type { ChartLayoutMode, TimeInterval } from "../types/chart";
+import { LayoutSwitchMenu } from "./LayoutSwitchMenu";
 import type { Candle } from "../types/market";
 import { isAShareSessionOpen } from "../utils/marketSession";
 import type { QuoteMap } from "../hooks/useWatchlistQuotes";
@@ -27,6 +28,10 @@ interface Props {
   effectivePrice: number;
   displayCandles: Candle[];
   quotes: QuoteMap;
+  chartLayout: ChartLayoutMode;
+  onChartLayout: (mode: ChartLayoutMode) => void;
+  noviceMode: boolean;
+  onToggleNovice: () => void;
 }
 
 export function TopStatusBar({
@@ -44,6 +49,10 @@ export function TopStatusBar({
   effectivePrice,
   displayCandles,
   quotes,
+  chartLayout,
+  onChartLayout,
+  noviceMode,
+  onToggleNovice,
 }: Props) {
   const [sessionOpen, setSessionOpen] = useState(() => isAShareSessionOpen());
 
@@ -126,6 +135,16 @@ export function TopStatusBar({
       <div className="top-spacer" aria-hidden />
 
       <div className="top-zone top-zone-actions">
+        <LayoutSwitchMenu value={chartLayout} onChange={onChartLayout} />
+        <button
+          type="button"
+          className={`top-btn top-btn-novice${noviceMode ? " on" : ""}`}
+          title="开启后用白话解读盘面与指标"
+          aria-pressed={noviceMode}
+          onClick={onToggleNovice}
+        >
+          白话
+        </button>
         <button type="button" className="top-btn top-btn-ai" onClick={onDiagnose}>
           <span className="top-btn-spark" aria-hidden>
             ✦

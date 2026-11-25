@@ -1,13 +1,18 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { AlertSettings } from "./components/AlertSettings";
 import { ChartErrorBoundary } from "./components/ChartErrorBoundary";
 import { ChartLoadOverlay } from "./components/ChartLoadOverlay";
 import { TopStatusBar } from "./components/TopStatusBar";
 import { ChartToolbar } from "./components/ChartToolbar";
-import {
-  ChartWorkspace,
-  type ChartWorkspaceHandle,
-} from "./components/ChartWorkspace";
+import { ChartPaneGrid } from "./components/ChartPaneGrid";
+import type { ChartWorkspaceHandle } from "./components/ChartWorkspace";
 import { AiDiagnoseModal } from "./components/AiDiagnoseModal";
 import { ErrorBanner } from "./components/ErrorBanner";
 import { MultiTimeframeRadar } from "./components/MultiTimeframeRadar";
@@ -21,14 +26,33 @@ import {
   DEFAULT_CHART_OPTIONS,
   type ChartDisplayOptions,
   INTERVALS,
+  type ChartLayoutMode,
   type TimeInterval,
 } from "./types/chart";
 import type { AlertSignal, Candle, WatchlistItem } from "./types/market";
 import { usePersistedWatchlist } from "./hooks/usePersistedWatchlist";
 import { usePriceLines } from "./hooks/usePriceLines";
 import { usePriceColorScheme } from "./hooks/usePriceColorScheme";
+import { usePaperTrades } from "./hooks/usePaperTrades";
+import {
+  defaultDualSecondary,
+  QUAD_INTERVALS_DEFAULT,
+  resolveToolbarInterval,
+} from "./utils/chartLayout";
+import { useNoviceAssist } from "./hooks/useNoviceAssist";
+import { useWatchlistEmaSignals } from "./hooks/useWatchlistEmaSignals";
+import { MarketBriefBanner } from "./components/MarketBriefBanner";
 import { DEFAULT_SYMBOL } from "./config/market";
+import {
+  INDEX_WIND_SYMBOLS,
+  PINNED_A_SHARE_SYMBOLS,
+} from "./config/pinnedWatchlist";
 import { backfillEmaSignals } from "./utils/signalHistory";
+import {
+  findKeyLevels,
+  keyLevelDistances,
+  scanPatternMarkers,
+} from "./utils/chartPatterns";
 
 const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8765";
 
@@ -70,14 +94,100 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [chartLayout, setChartLayout] = useState<ChartLayoutMode>("single");
+  const prevChartLayout = useRef<ChartLayoutMode>("single");
+  const [screenerSymbols, setScreenerSymbols] = useState<string[] | null>(
+    null
+  );
   const [diagnoseOpen, setDiagnoseOpen] = useState(false);
+  useEffect(() => {
+    if (chartLayout === "quad" && prevChartLayout.current !== "quad") {
+      setLeftPanelOpen(false);
+      setRightPanelOpen(false);
+    }
+    prevChartLayout.current = chartLayout;
+  }, [chartLayout]);
+
+  const [multiActivePane, setMultiActivePane] = useState(0);
+  const [dualPaneIv, setDualPaneIv] = useState<TimeInterval>("15m");
+  const [quadPaneIvs, setQuadPaneIvs] = useState<TimeInterval[]>([
+    ...QUAD_INTERVALS_DEFAULT,
+  ]);
+
+  useEffect(() => {
+    setMultiActivePane(0);
+    setDualPaneIv(defaultDualSecondary(interval));
+    setQuadPaneIvs(() => {
+      const next = [...QUAD_INTERVALS_DEFAULT];
+      next[0] = interval;
+      return next;
+    });
+  }, [symbol]);
+
+  useEffect(() => {
+    setMultiActivePane(0);
+  }, [chartLayout]);
+
+  useEffect(() => {
+    setQuadPaneIvs((prev) => {
+      const next = [...prev];
+      next[0] = interval;
+      return next;
+    });
+  }, [interval]);
+
+  const toolbarInterval = useMemo(
+    () =>
+      resolveToolbarInterval(
+        chartLayout,
+        multiActivePane,
+        interval,
+        dualPaneIv,
+        quadPaneIvs
+      ),
+    [chartLayout, multiActivePane, interval, dualPaneIv, quadPaneIvs]
+  );
+
+  const applyChartInterval = useCallback(
+    (iv: TimeInterval) => {
+      if (chartLayout === "single") {
+        setInterval(iv);
+        return;
+      }
+      if (chartLayout === "dual") {
+        if (multiActivePane === 1) setDualPaneIv(iv);
+        else setInterval(iv);
+        return;
+      }
+      setQuadPaneIvs((prev) => {
+        const next = [...prev];
+        next[multiActivePane] = iv;
+        return next;
+      });
+      if (multiActivePane === 0) setInterval(iv);
+    },
+    [chartLayout, multiActivePane]
+  );
+
+  const onQuadIvChange = useCallback((idx: number, iv: TimeInterval) => {
+    setQuadPaneIvs((prev) => {
+      const next = [...prev];
+      next[idx] = iv;
+      return next;
+    });
+    if (idx === 0) setInterval(iv);
+  }, []);
+
   const [signalScope, setSignalScope] = useState<SignalScope>("current");
   const [watchlistSignals, setWatchlistSignals] = useState<AlertSignal[]>([]);
   const { rules, setRules } = useAlertRules();
   const { mode: priceColorMode, setMode: setPriceColorMode, colors: priceColors } =
     usePriceColorScheme(symbol);
+  const { noviceMode, toggleNovice } = useNoviceAssist();
   const { items: watchlistSeed, addSymbol, symbolList } = usePersistedWatchlist();
   const { lines: priceLines, addLine, removeLine } = usePriceLines(symbol);
+  const { trades: paperTrades, openPosition, buy: paperBuy, sell: paperSell } =
+    usePaperTrades(symbol);
   const pushedSignals = useRef(new Set<string>());
   const priceLineHits = useRef(new Set<string>());
 
@@ -89,7 +199,12 @@ export default function App() {
       visibleWatchSymbols.length > 0
         ? visibleWatchSymbols
         : symbolList.slice(0, 15);
-    const merged = new Set([symbol, ...visible]);
+    const merged = new Set([
+      symbol,
+      ...INDEX_WIND_SYMBOLS,
+      ...PINNED_A_SHARE_SYMBOLS,
+      ...visible,
+    ]);
     return [...merged];
   }, [visibleWatchSymbols, symbolList, symbol]);
 
@@ -158,30 +273,47 @@ export default function App() {
       if (added.length === 0) return prev;
       return [...added, ...prev].slice(0, 200);
     });
-  }, [market.signals]);
+  }, [market.signals, symbolList]);
+
+  const watchlistScopeSymbols = useMemo(() => {
+    const merged = new Set<string>([
+      symbol,
+      ...PINNED_A_SHARE_SYMBOLS,
+      ...symbolList.slice(0, 12),
+    ]);
+    return [...merged];
+  }, [symbol, symbolList]);
+
+  const watchlistBackfill = useWatchlistEmaSignals(
+    watchlistScopeSymbols,
+    interval,
+    signalScope === "watchlist"
+  );
 
   const displaySignals = useMemo(() => {
     if (signalScope === "watchlist") {
+      const allow = new Set(watchlistScopeSymbols);
+      const live = market.signals.filter((s) => allow.has(s.symbol));
       const seen = new Set<string>();
       const merged: AlertSignal[] = [];
-      for (const s of [...allSignals, ...watchlistSignals]) {
-        if (!symbolList.includes(s.symbol)) continue;
+      for (const s of [...live, ...watchlistSignals, ...watchlistBackfill]) {
+        if (!allow.has(s.symbol)) continue;
         const key = `${s.symbol}-${s.rule}-${s.bar_time ?? s.ts}`;
         if (seen.has(key)) continue;
         seen.add(key);
         merged.push(s);
       }
-      return merged
-        .sort((a, b) => b.ts - a.ts)
-        .slice(0, 100);
+      return merged.sort((a, b) => b.ts - a.ts).slice(0, 100);
     }
-    return allSignals.filter((s) => s.symbol === chartViewSymbol);
+    return allSignals.filter((s) => s.symbol === symbol);
   }, [
     signalScope,
     allSignals,
     watchlistSignals,
-    chartViewSymbol,
-    symbolList,
+    watchlistBackfill,
+    watchlistScopeSymbols,
+    market.signals,
+    symbol,
   ]);
 
   useEffect(() => {
@@ -215,6 +347,36 @@ export default function App() {
       ? market.price
       : quotePx
     : 0;
+
+  const patternMarkers = useMemo(
+    () => scanPatternMarkers(displayCandles),
+    [displayCandles]
+  );
+
+  const autoPriceLines = useMemo(() => {
+    const levels = findKeyLevels(displayCandles);
+    const dist = keyLevelDistances(
+      displayCandles,
+      effectivePrice,
+      levels
+    );
+    const lines: { price: number; title: string; color?: string }[] = [];
+    if (dist.resistance) {
+      lines.push({
+        price: dist.resistance.price,
+        title: "阻力",
+        color: "#F59E0B",
+      });
+    }
+    if (dist.support) {
+      lines.push({
+        price: dist.support.price,
+        title: "支撑",
+        color: "#3B82F6",
+      });
+    }
+    return lines;
+  }, [displayCandles, effectivePrice]);
 
   useEffect(() => {
     const px = effectivePrice;
@@ -262,6 +424,12 @@ export default function App() {
     });
   }, [quotes, symbol, effectivePrice, market.candles, watchlistSeed]);
 
+  const watchlistDisplay = useMemo(() => {
+    if (!screenerSymbols) return watchlist;
+    const allow = new Set(screenerSymbols);
+    return watchlist.filter((item) => allow.has(item.symbol));
+  }, [watchlist, screenerSymbols]);
+
   const activeName =
     watchlistSeed.find((i) => i.symbol === symbol)?.name ?? symbol;
 
@@ -281,7 +449,7 @@ export default function App() {
       }
       const n = Number(e.key);
       if (n >= 1 && n <= 6) {
-        setInterval(INTERVALS[n - 1]);
+        applyChartInterval(INTERVALS[n - 1]);
         return;
       }
       const idx = symbolList.indexOf(symbol);
@@ -296,7 +464,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [symbol, symbolList, leftPanelOpen, rightPanelOpen]);
+  }, [symbol, symbolList, leftPanelOpen, rightPanelOpen, applyChartInterval]);
 
   const shellStyle = {
     "--color-price-up": priceColors.up,
@@ -308,7 +476,7 @@ export default function App() {
       <TopStatusBar
         symbol={symbol}
         symbolName={activeName}
-        interval={interval}
+        interval={toolbarInterval}
         loadError={market.loadError}
         loading={market.loading}
         chartReady={chartReady}
@@ -320,6 +488,10 @@ export default function App() {
         effectivePrice={effectivePrice}
         displayCandles={displayCandles}
         quotes={quotes}
+        chartLayout={chartLayout}
+        onChartLayout={setChartLayout}
+        noviceMode={noviceMode}
+        onToggleNovice={toggleNovice}
       />
 
       {showBanner && market.loadError && (
@@ -338,38 +510,51 @@ export default function App() {
         className={`layout${leftPanelOpen ? "" : " collapsed-left"}${rightPanelOpen ? "" : " collapsed-right"}`}
       >
         <aside className="panel-shell panel-shell-left">
-          <button
-            type="button"
-            className="panel-fold panel-fold-left"
-            title={leftPanelOpen ? "收起自选 (F 专注)" : "展开自选"}
-            onClick={() => setLeftPanelOpen((o) => !o)}
-          >
-            {leftPanelOpen ? "◂" : "▸"}
-          </button>
+          {!leftPanelOpen && (
+            <button
+              type="button"
+              className="panel-fold panel-fold-left panel-fold-collapsed"
+              title="展开自选"
+              onClick={() => setLeftPanelOpen(true)}
+            >
+              ▸
+            </button>
+          )}
           {leftPanelOpen && (
             <Watchlist
-              items={watchlist}
+              items={watchlistDisplay}
+              poolItems={watchlist}
               active={symbol}
               onSelect={setSymbol}
               onAddSymbol={addSymbol}
               quotesLoading={quotesLoading}
               onVisibleSymbols={setVisibleWatchSymbols}
               priceColors={priceColors}
+              quotes={quotes}
+              screenerActive={screenerSymbols != null}
+              onScreenerResult={setScreenerSymbols}
+              onCollapsePanel={() => setLeftPanelOpen(false)}
             />
           )}
         </aside>
         <main className="chart-area">
           <ChartToolbar
-            interval={interval}
-            onInterval={setInterval}
+            interval={toolbarInterval}
+            onInterval={applyChartInterval}
             options={chartOptions}
             onOptions={setChartOptions}
             price={effectivePrice}
             lines={priceLines}
             onAddLine={addLine}
             onRemoveLine={removeLine}
+            noviceMode={noviceMode}
           />
-          <MultiTimeframeRadar symbol={symbol} />
+          {noviceMode && displayCandles.length > 0 && (
+            <MarketBriefBanner candles={displayCandles} />
+          )}
+          {chartLayout === "single" && (
+            <MultiTimeframeRadar symbol={symbol} />
+          )}
           <div className="chart-stack">
             {showStale && (
               <span className="delayed-tag">延迟 · {chartViewSymbol}</span>
@@ -386,42 +571,67 @@ export default function App() {
             />
             {displayCandles.length > 0 && (
               <ChartErrorBoundary
-                key={`err-${chartViewSymbol}-${interval}`}
+                key={`err-${chartViewSymbol}-${interval}-${chartLayout}`}
                 onRetry={market.retry}
               >
-                <ChartWorkspace
+                <div className="chart-stack-body">
+                <ChartPaneGrid
                   ref={chartRef}
-                  key={`${chartViewSymbol}-${interval}`}
+                  layout={chartLayout}
                   symbol={chartViewSymbol}
-                  candles={displayCandles}
+                  primaryInterval={interval}
+                  primaryCandles={displayCandles}
                   signals={allSignals}
                   options={chartOptions}
                   priceLines={priceLines}
                   priceColors={priceColors}
+                  paperTrades={paperTrades}
+                  openEntry={openPosition?.entry ?? null}
+                  livePrice={effectivePrice}
                   onAddPriceLine={(p) => addLine(p, "关键价位")}
+                  patternMarkers={patternMarkers}
+                  autoPriceLines={autoPriceLines}
+                  activePane={multiActivePane}
+                  onActivePaneChange={setMultiActivePane}
+                  dualIv={dualPaneIv}
+                  onDualIvChange={setDualPaneIv}
+                  quadIvs={quadPaneIvs}
+                  onQuadIvChange={onQuadIvChange}
                 />
+                </div>
               </ChartErrorBoundary>
             )}
           </div>
         </main>
         <aside className="panel-shell panel-shell-right">
-          <button
-            type="button"
-            className="panel-fold panel-fold-right"
-            title={rightPanelOpen ? "收起侧栏 (F 专注)" : "展开侧栏"}
-            onClick={() => setRightPanelOpen((o) => !o)}
-          >
-            {rightPanelOpen ? "▸" : "◂"}
-          </button>
+          {!rightPanelOpen && (
+            <button
+              type="button"
+              className="panel-fold panel-fold-right panel-fold-collapsed"
+              title="展开侧栏"
+              onClick={() => setRightPanelOpen(true)}
+            >
+              ◂
+            </button>
+          )}
           {rightPanelOpen && (
             <RightDock
               symbol={chartViewSymbol}
               price={effectivePrice}
+              supportPrice={
+                autoPriceLines.find((l) => l.title === "支撑")?.price ?? null
+              }
               candles={displayCandles}
               signals={displaySignals}
               rules={rules}
               scope={signalScope}
               onScopeChange={setSignalScope}
+              onCollapsePanel={() => setRightPanelOpen(false)}
+              paperOpen={openPosition}
+              paperTrades={paperTrades}
+              onPaperBuy={(qty) => paperBuy(effectivePrice, qty)}
+              onPaperSell={(qty) => paperSell(effectivePrice, qty)}
+              chartInterval={interval}
               onPickSignal={(sig) => {
                 if (sig.symbol !== symbol) setSymbol(sig.symbol);
                 const t = sig.bar_time;
@@ -438,7 +648,14 @@ export default function App() {
         <AiDiagnoseModal
           symbol={symbol}
           interval={interval}
+          candles={displayCandles}
+          price={effectivePrice}
           onClose={() => setDiagnoseOpen(false)}
+          onDrawLevels={(support, resistance) => {
+            if (support != null) addLine(support, "支撑");
+            if (resistance != null) addLine(resistance, "阻力");
+            setDiagnoseOpen(false);
+          }}
         />
       )}
 

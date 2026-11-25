@@ -1,12 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { analyzeMtfResonance, type MtfFrame } from "../utils/mtfResonance";
 
 const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8765";
 
-interface Frame {
-  interval: string;
-  trend: "bull" | "bear" | "neutral";
-  rsi: number | null;
-}
+type Frame = MtfFrame;
 
 interface Props {
   symbol: string;
@@ -37,12 +34,23 @@ export function MultiTimeframeRadar({ symbol }: Props) {
     };
   }, [symbol]);
 
-  if (frames.length === 0) return null;
+  const display = useMemo(() => {
+    const want = new Set(["5m", "15m", "1h", "1d"]);
+    const picked = frames.filter((f) => want.has(f.interval));
+    return picked.length > 0 ? picked : frames.slice(0, 4);
+  }, [frames]);
+
+  const resonance = useMemo(
+    () => analyzeMtfResonance(display),
+    [display]
+  );
+
+  if (display.length === 0) return null;
 
   return (
     <section className="radar-matrix" aria-label="多周期共振">
-      <span className="radar-title">共振雷达</span>
-      {frames.map((f) => (
+      <span className="radar-title">多周期扫描</span>
+      {display.map((f) => (
         <div key={f.interval} className={`radar-cell trend-${f.trend}`}>
           <strong>{f.interval}</strong>
           <span>{f.trend === "bull" ? "多" : f.trend === "bear" ? "空" : "—"}</span>
@@ -51,6 +59,10 @@ export function MultiTimeframeRadar({ symbol }: Props) {
           </span>
         </div>
       ))}
+      <p className="radar-resonance">
+        <strong>{resonance.headline}</strong>
+        <span className="muted">{resonance.detail}</span>
+      </p>
     </section>
   );
 }

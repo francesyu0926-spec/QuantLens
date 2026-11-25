@@ -3,17 +3,28 @@ import { A_SHARE_ONLY } from "../config/market";
 import { isAShareSessionOpen } from "../utils/marketSession";
 import type { PriceColors } from "../utils/priceColors";
 import type { WatchlistItem } from "../types/market";
+import type { QuoteMap } from "../hooks/useWatchlistQuotes";
+import { PINNED_A_SHARE_SYMBOLS } from "../config/pinnedWatchlist";
+import { ScreenerModal } from "./ScreenerModal";
+import { MarketIndexStrip } from "./MarketIndexStrip";
+import { MarketSentimentBar } from "./MarketSentimentBar";
+import { Sparkline } from "./Sparkline";
 
 const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8765";
 
 interface Props {
   items: WatchlistItem[];
+  poolItems?: WatchlistItem[];
   active: string;
   onSelect: (symbol: string) => void;
   onAddSymbol?: (symbol: string, name: string) => void;
   quotesLoading?: boolean;
   onVisibleSymbols?: (symbols: string[]) => void;
   priceColors: PriceColors;
+  quotes?: QuoteMap;
+  screenerActive?: boolean;
+  onScreenerResult?: (symbols: string[] | null) => void;
+  onCollapsePanel?: () => void;
 }
 
 type GroupKey = "crypto" | "us" | "a_share";
@@ -36,39 +47,6 @@ function classify(symbol: string): GroupKey {
   return "us";
 }
 
-function Sparkline({
-  values,
-  colors,
-}: {
-  values?: number[];
-  colors: PriceColors;
-}) {
-  if (!values || values.length < 2) {
-    return null;
-  }
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const pts = values
-    .map((v, i) => {
-      const x = (i / (values.length - 1)) * 64;
-      const y = 18 - ((v - min) / range) * 16;
-      return `${x},${y}`;
-    })
-    .join(" ");
-  const up = values[values.length - 1] >= values[0];
-  return (
-    <svg className="spark" viewBox="0 0 64 20" aria-hidden>
-      <polyline
-        points={pts}
-        fill="none"
-        stroke={up ? colors.up : colors.down}
-        strokeWidth="1.2"
-      />
-    </svg>
-  );
-}
-
 function Row({
   item,
   active,
@@ -80,11 +58,15 @@ function Row({
   onSelect: (s: string) => void;
   priceColors: PriceColors;
 }) {
+  const hasQuote = item.price != null && item.price > 0;
+
   return (
     <li className="watch-li" data-symbol={item.symbol}>
       <button
         type="button"
-        className={`watch-row${item.symbol === active ? " active" : ""}`}
+        className={`watch-row${item.symbol === active ? " active" : ""}${
+          !hasQuote ? " no-quote" : ""
+        }`}
         onClick={() => onSelect(item.symbol)}
       >
         <div className="watch-ident">
@@ -95,26 +77,32 @@ function Row({
             {item.name || "—"}
           </span>
         </div>
-        <Sparkline values={item.sparkline} colors={priceColors} />
+        {hasQuote ? (
+          <Sparkline values={item.sparkline} colors={priceColors} />
+        ) : (
+          <span className="watch-spark-placeholder" aria-hidden />
+        )}
         <div className="watch-quote">
-          <span className="px">
-            {item.price == null || item.price <= 0
-              ? "—"
-              : item.price.toFixed(2)}
-          </span>
-          <span
-            className={
-              item.changePct == null
-                ? "chg"
-                : item.changePct >= 0
-                  ? "chg up"
-                  : "chg down"
-            }
-          >
-            {item.changePct == null
-              ? "—"
-              : `${item.changePct >= 0 ? "+" : ""}${item.changePct.toFixed(2)}%`}
-          </span>
+          {hasQuote ? (
+            <>
+              <span className="px">{item.price!.toFixed(2)}</span>
+              <span
+                className={
+                  item.changePct == null
+                    ? "chg"
+                    : item.changePct >= 0
+                      ? "chg up"
+                      : "chg down"
+                }
+              >
+                {item.changePct == null
+                  ? ""
+                  : `${item.changePct >= 0 ? "+" : ""}${item.changePct.toFixed(2)}%`}
+              </span>
+            </>
+          ) : (
+            <span className="watch-faint-dash">-</span>
+          )}
         </div>
       </button>
     </li>
@@ -123,15 +111,21 @@ function Row({
 
 export function Watchlist({
   items,
+  poolItems,
   active,
   onSelect,
   onAddSymbol,
   quotesLoading,
   onVisibleSymbols,
   priceColors,
+  quotes = {},
+  screenerActive = false,
+  onScreenerResult,
+  onCollapsePanel,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
+  const [screenerOpen, setScreenerOpen] = useState(false);
   const sessionOpen = isAShareSessionOpen();
   const [remoteHits, setRemoteHits] = useState<SearchHit[]>([]);
   const activeGroup = classify(active);
@@ -140,6 +134,7 @@ export function Watchlist({
     us: activeGroup !== "us",
     a_share: activeGroup !== "a_share",
   });
+  const [poolOpen, setPoolOpen] = useState(false);
 
   const known = useMemo(() => new Set(items.map((i) => i.symbol)), [items]);
 
@@ -242,7 +237,28 @@ export function Watchlist({
 
   return (
     <aside className="watchlist">
-      <h2>{A_SHARE_ONLY ? "A 股自选" : "自选"}</h2>
+      <div className="watch-title-row">
+        {onCollapsePanel && (
+          <button
+            type="button"
+            className="watch-fold"
+            title="收起自选 (F 专注)"
+            aria-label="收起自选"
+            onClick={onCollapsePanel}
+          >
+            ◂
+          </button>
+        )}
+        <h2>{A_SHARE_ONLY ? "A 股自选" : "自选"}</h2>
+        <button
+          type="button"
+          className={`watch-screener${screenerActive ? " on" : ""}`}
+          title="条件选股"
+          onClick={() => setScreenerOpen(true)}
+        >
+          ⛃
+        </button>
+      </div>
       <label className="watch-search-wrap">
         <span className="watch-search-icon" aria-hidden>
           ⌕
@@ -256,9 +272,16 @@ export function Watchlist({
           onChange={(e) => setQuery(e.target.value)}
         />
       </label>
-      <p className="watch-hint muted">
-        已加载 {items.length} 标的 · 支持全市场搜索
-      </p>
+      {screenerActive && (
+        <p className="watch-hint muted">筛选结果 {items.length} 只</p>
+      )}
+      <ScreenerModal
+        open={screenerOpen}
+        items={poolItems ?? items}
+        quotes={quotes}
+        onClose={() => setScreenerOpen(false)}
+        onResult={(syms) => onScreenerResult?.(syms)}
+      />
       {quotesLoading && sessionOpen && (
         <p className="quotes-status">实时报价获取中…</p>
       )}
@@ -310,23 +333,93 @@ export function Watchlist({
                 </span>
                 <span>{shut ? "▸" : "▾"}</span>
               </button>
-              {!shut && (
-                <ul>
-                  {rows.map((item) => (
-                    <Row
-                      key={item.symbol}
-                      item={item}
-                      active={active}
-                      onSelect={onSelect}
-                      priceColors={priceColors}
-                    />
-                  ))}
-                </ul>
+              {!shut && key === "a_share" && rows.length > 6 ? (
+                <>
+                  <p className="watch-subhead muted">精选自选</p>
+                  <ul>
+                    {(() => {
+                      const pinned = new Set<string>(PINNED_A_SHARE_SYMBOLS);
+                      const pinnedRows = PINNED_A_SHARE_SYMBOLS.map((sym) =>
+                        rows.find((r) => r.symbol === sym)
+                      ).filter(Boolean) as WatchlistItem[];
+                      const rest = rows.filter(
+                        (i) =>
+                          !pinned.has(i.symbol) &&
+                          ((i.price ?? 0) > 0 || i.symbol === active)
+                      );
+                      const seen = new Set<string>();
+                      const merged: WatchlistItem[] = [];
+                      for (const item of [...pinnedRows, ...rest]) {
+                        if (seen.has(item.symbol)) continue;
+                        seen.add(item.symbol);
+                        merged.push(item);
+                      }
+                      return merged;
+                    })().map((item) => (
+                        <Row
+                          key={item.symbol}
+                          item={item}
+                          active={active}
+                          onSelect={onSelect}
+                          priceColors={priceColors}
+                        />
+                      ))}
+                  </ul>
+                  {rows.some((i) => (i.price ?? 0) <= 0 && i.symbol !== active) && (
+                    <>
+                      <button
+                        type="button"
+                        className="watch-pool-head"
+                        onClick={() => setPoolOpen((o) => !o)}
+                      >
+                        <span>全市场池（点击展开）</span>
+                        <span>{poolOpen ? "▾" : "▸"}</span>
+                      </button>
+                      {poolOpen && (
+                        <ul>
+                          {rows
+                            .filter(
+                              (i) => (i.price ?? 0) <= 0 && i.symbol !== active
+                            )
+                            .map((item) => (
+                              <Row
+                                key={item.symbol}
+                                item={item}
+                                active={active}
+                                onSelect={onSelect}
+                                priceColors={priceColors}
+                              />
+                            ))}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </>
+              ) : (
+                !shut && (
+                  <ul>
+                    {rows.map((item) => (
+                      <Row
+                        key={item.symbol}
+                        item={item}
+                        active={active}
+                        onSelect={onSelect}
+                        priceColors={priceColors}
+                      />
+                    ))}
+                  </ul>
+                )
               )}
             </section>
           );
         })}
       </div>
+      <MarketSentimentBar items={items} />
+      <MarketIndexStrip
+        quotes={quotes}
+        priceColors={priceColors}
+        onSelect={onSelect}
+      />
     </aside>
   );
 }
