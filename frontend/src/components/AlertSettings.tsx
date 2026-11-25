@@ -73,6 +73,21 @@ export function AlertSettings({ open, rules, onChange, onClose }: Props) {
           checked={rules.soundEnabled}
           onChange={(v) => onChange({ ...rules, soundEnabled: v })}
         />
+        <ToggleRow
+          label="推送到 Webhook（Server酱 / 飞书 / 钉钉等）"
+          checked={rules.webhookEnabled}
+          onChange={(v) => onChange({ ...rules, webhookEnabled: v })}
+        />
+        <label className="alert-row">
+          <span>Webhook URL</span>
+          <input
+            type="url"
+            className="webhook-input"
+            placeholder="https://..."
+            value={rules.webhookUrl}
+            onChange={(e) => onChange({ ...rules, webhookUrl: e.target.value })}
+          />
+        </label>
       </section>
     </div>
   );

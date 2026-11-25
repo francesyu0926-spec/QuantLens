@@ -1,11 +1,16 @@
 import type { AlertRules } from "../hooks/useAlertRules";
 import type { AlertSignal } from "../types/market";
 
+export type SignalScope = "current" | "watchlist";
+
 interface Props {
   signals: AlertSignal[];
   onOpenSettings: () => void;
   rules: AlertRules;
   onPick?: (signal: AlertSignal) => void;
+  scope: SignalScope;
+  onScopeChange: (scope: SignalScope) => void;
+  className?: string;
 }
 
 function signalTone(rule: string): "bull" | "bear" | "neutral" {
@@ -26,8 +31,19 @@ function signalTone(rule: string): "bull" | "bear" | "neutral" {
   return "neutral";
 }
 
-function ruleEnabled(rule: string, rules: AlertRules): boolean {
-  if (rule === "ema_golden_cross" || rule === "ema_death_cross") return rules.emaCross;
+function formatSignalTime(sig: AlertSignal): string {
+  if (sig.bar_time != null && sig.bar_time > 0) {
+    return new Date(sig.bar_time * 1000).toLocaleTimeString();
+  }
+  return new Date(sig.ts).toLocaleTimeString();
+}
+
+function ruleEnabled(rule: string, rules: AlertRules, message: string): boolean {
+  if (rule === "ema_golden_cross" || rule === "ema_death_cross") {
+    // 与主图历史标记一致：回填始终展示；盘中预警仍受规则开关控制
+    if (message.startsWith("[历史]")) return true;
+    return rules.emaCross;
+  }
   if (rule === "rsi_oversold") return rules.rsiOversold;
   if (rule === "rsi_overbought") return rules.rsiOverbought;
   if (rule === "bb_break_lower") return rules.bbLower;
@@ -35,21 +51,47 @@ function ruleEnabled(rule: string, rules: AlertRules): boolean {
   return true;
 }
 
-export function SignalLog({ signals, onOpenSettings, rules, onPick }: Props) {
-  const visible = signals.filter((s) => ruleEnabled(s.rule, rules));
+export function SignalLog({
+  signals,
+  onOpenSettings,
+  rules,
+  onPick,
+  scope,
+  onScopeChange,
+  className,
+}: Props) {
+  const visible = signals.filter((s) => ruleEnabled(s.rule, rules, s.message));
 
   return (
-    <section className="signal-log">
+    <section className={`signal-log${className ? ` ${className}` : ""}`}>
       <header className="signal-head">
         <h2>策略信号</h2>
-        <button
-          type="button"
-          className="chip icon-btn"
-          title="预警规则"
-          onClick={onOpenSettings}
-        >
-          ⚙
-        </button>
+        <div className="signal-head-actions">
+          <div className="signal-scope" role="group" aria-label="信号范围">
+            <button
+              type="button"
+              className={`scope-btn${scope === "current" ? " on" : ""}`}
+              onClick={() => onScopeChange("current")}
+            >
+              当前
+            </button>
+            <button
+              type="button"
+              className={`scope-btn${scope === "watchlist" ? " on" : ""}`}
+              onClick={() => onScopeChange("watchlist")}
+            >
+              自选
+            </button>
+          </div>
+          <button
+            type="button"
+            className="chip icon-btn"
+            title="预警规则"
+            onClick={onOpenSettings}
+          >
+            ⚙
+          </button>
+        </div>
       </header>
       <div className="log-scroll">
         {visible.length === 0 && (
@@ -72,13 +114,13 @@ export function SignalLog({ signals, onOpenSettings, rules, onPick }: Props) {
                 }
               }}
             >
-              <div className="signal-main">
-                <strong>{sig.message}</strong>
-                <span className="price">@{sig.price.toFixed(2)}</span>
+              <div className="signal-row signal-row-top">
+                <span className="signal-msg">{sig.message}</span>
+                <time>{formatSignalTime(sig)}</time>
               </div>
-              <div className="signal-meta">
-                <span>{sig.symbol}</span>
-                <time>{new Date(sig.ts).toLocaleTimeString()}</time>
+              <div className="signal-row signal-row-bot">
+                <span className="signal-sym">{sig.symbol}</span>
+                <span className="signal-price">@{sig.price.toFixed(2)}</span>
               </div>
             </article>
           );

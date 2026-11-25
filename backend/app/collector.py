@@ -10,6 +10,7 @@ from .akshare_a import AkshareAShareFeed, fetch_bars, merge_candles, normalize_a
 from .ccxt_crypto import CcxtCryptoFeed, fetch_crypto_bars
 from .intervals import normalize_interval
 from .models import Candle, SymbolBook
+from .market_mode import reject_unless_allowed
 from .symbols import classify_market
 from .yfinance_us import YfinanceUSFeed, fetch_us_bars
 
@@ -37,6 +38,7 @@ class MarketCollector:
         return self._bootstrap_locks[key]
 
     async def ensure_history(self, symbol: str, interval: str = "1m") -> SymbolBook:
+        reject_unless_allowed(symbol)
         iv = normalize_interval(interval)
         key = self._key(symbol, iv)
         book = self.book(symbol, iv)
@@ -73,6 +75,7 @@ class MarketCollector:
     async def watch(
         self, symbol: str, interval: str = "1m"
     ) -> AsyncIterator[tuple[Candle, float]]:
+        reject_unless_allowed(symbol)
         iv = normalize_interval(interval)
         book = await self.ensure_history(symbol, iv)
         kind = classify_market(symbol)

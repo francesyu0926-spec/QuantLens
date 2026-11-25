@@ -1,5 +1,7 @@
 from pathlib import Path
 
+# 仅 A 股：设置环境变量 QUANTLENS_MARKET=a_share（默认即为 a_share）
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "quantlens.db"

@@ -23,7 +23,10 @@ def is_a_share(symbol: str) -> bool:
         s = s[2:]
     if len(s) != 6 or not s.isdigit():
         return False
-    return s[0] in "0368"
+    if s[0] in "0368":
+        return True
+    # Shanghai/Shenzhen listed ETFs (e.g. 510300, 159915)
+    return s.startswith(("51", "56", "58", "15", "16"))
 
 
 def normalize_a_share_code(symbol: str) -> str:
@@ -33,8 +36,16 @@ def normalize_a_share_code(symbol: str) -> str:
     return s
 
 
+def is_listed_etf(code: str) -> bool:
+    """On-exchange ETF fund codes (Shanghai / Shenzhen)."""
+    return code.startswith(("51", "56", "58", "15", "16"))
+
+
 def sina_prefix(code: str) -> str:
-    return f"sh{code}" if code.startswith("6") else f"sz{code}"
+    # Shanghai: 6xx stocks, 5xx / 9xx funds & indices; Shenzhen: 0/3/1xx
+    if code.startswith(("5", "6", "9")):
+        return f"sh{code}"
+    return f"sz{code}"
 
 
 def _parse_bar_time(value: str) -> int:
@@ -104,7 +115,46 @@ def _resample_candles(candles: list[Candle], bucket_sec: int) -> list[Candle]:
     return [buckets[k] for k in sorted(buckets)]
 
 
+def _fetch_etf_daily(code: str) -> list[Candle]:
+    import akshare as ak
+
+    df = ak.fund_etf_hist_em(
+        symbol=code,
+        period="daily",
+        start_date="20220101",
+        end_date="20500101",
+        adjust="qfq",
+    )
+    if df is None or df.empty:
+        return []
+
+    candles: list[Candle] = []
+    for row in df.to_dict(orient="records"):
+        try:
+            day = str(row.get("日期", "")).strip()
+            dt = datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=CN_TZ)
+            candles.append(
+                Candle(
+                    time=int(dt.timestamp()),
+                    open=float(row["开盘"]),
+                    high=float(row["最高"]),
+                    low=float(row["最低"]),
+                    close=float(row["收盘"]),
+                    volume=float(row.get("成交量") or 0),
+                )
+            )
+        except (ValueError, KeyError, TypeError):
+            continue
+    return candles[-500:]
+
+
 def _fetch_daily(code: str) -> list[Candle]:
+    if is_listed_etf(code):
+        try:
+            return _fetch_etf_daily(code)
+        except Exception as exc:
+            logger.warning("AKShare ETF daily fetch failed %s: %s", code, exc)
+
     import akshare as ak
 
     df = ak.stock_zh_a_hist(
@@ -154,11 +204,19 @@ def fetch_bars(code: str, interval: str = "1m") -> list[Candle]:
     errors: list[str] = []
     candles: list[Candle] = []
 
-    try:
-        df = ak.stock_zh_a_hist_min_em(symbol=code, period=period, adjust="")
-        candles = _df_to_candles(df)
-    except Exception as exc:
-        errors.append(f"eastmoney: {exc}")
+    if is_listed_etf(code):
+        try:
+            df = ak.fund_etf_hist_min_em(symbol=code, period=period, adjust="")
+            candles = _df_to_candles(df)
+        except Exception as exc:
+            errors.append(f"etf-min: {exc}")
+
+    if not candles:
+        try:
+            df = ak.stock_zh_a_hist_min_em(symbol=code, period=period, adjust="")
+            candles = _df_to_candles(df)
+        except Exception as exc:
+            errors.append(f"eastmoney: {exc}")
 
     if not candles:
         try:
@@ -166,6 +224,13 @@ def fetch_bars(code: str, interval: str = "1m") -> list[Candle]:
             candles = _df_to_candles(df)
         except Exception as exc:
             errors.append(f"sina: {exc}")
+
+    if not candles and is_listed_etf(code):
+        try:
+            daily = _fetch_etf_daily(code)
+            candles = daily[-120:]
+        except Exception as exc:
+            errors.append(f"etf-daily-fallback: {exc}")
 
     if not candles and errors:
         logger.warning("AKShare fetch failed for %s@%s: %s", code, iv, "; ".join(errors))

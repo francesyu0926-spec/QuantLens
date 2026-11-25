@@ -3,15 +3,24 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import time
 from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel, Field
 
+from .catalog import search_symbols
+from .depth import fetch_depth_sync
+from .diagnose import build_diagnosis
 from .quotes import fetch_quotes
+from .radar import fetch_radar
+from .webhook import post_webhook
 from fastapi.middleware.cors import CORSMiddleware
 
 from .collector import MarketCollector
+from .market_mode import A_SHARE_ONLY
 from .config import WS_HOST, WS_PORT
 from .intervals import normalize_interval
 from .indicators import compute_indicators
@@ -40,13 +49,70 @@ app.add_middleware(
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "market": "a_share" if A_SHARE_ONLY else "multi",
+    }
 
 
 @app.get("/quotes")
 async def quotes(symbols: str = Query(..., description="Comma-separated symbols")) -> dict:
     sym_list = [s.strip() for s in symbols.split(",") if s.strip()]
+    if len(sym_list) > 250:
+        sym_list = sym_list[:250]
     return await fetch_quotes(sym_list)
+
+
+@app.get("/catalog/search")
+async def catalog_search(
+    q: str = Query("", min_length=1),
+    limit: int = Query(40, ge=1, le=100),
+) -> dict:
+    return {"items": search_symbols(q, limit=limit)}
+
+
+class WebhookRelay(BaseModel):
+    url: str = Field(..., min_length=8, max_length=2048)
+    title: str = ""
+    text: str = ""
+    payload: dict[str, Any] | None = None
+
+
+@app.post("/webhook/relay")
+async def webhook_relay(body: WebhookRelay) -> dict[str, bool]:
+    data = body.payload or {
+        "title": body.title or "QuantLens",
+        "text": body.text,
+    }
+    ok = await post_webhook(body.url, data)
+    return {"ok": ok}
+
+
+@app.get("/radar")
+async def radar(symbol: str = Query(...)) -> dict[str, Any]:
+    rows = await fetch_radar(collector, symbol)
+    return {"symbol": symbol, "frames": rows}
+
+
+@app.get("/depth")
+async def depth(
+    symbol: str = Query(...),
+    levels: int = Query(10, ge=1, le=25),
+) -> dict[str, Any]:
+    import asyncio
+
+    return await asyncio.to_thread(fetch_depth_sync, symbol, levels=levels)
+
+
+@app.get("/diagnose")
+async def diagnose(symbol: str = Query(...), interval: str = Query("1m")) -> dict:
+    iv = normalize_interval(interval)
+    book = await collector.ensure_history(symbol, iv)
+    history = [c.to_dict() for c in book.candles]
+    indicators = compute_indicators(history)
+    signals = scan_signals(symbol, book.last_price, history, indicators)
+    text = build_diagnosis(symbol, history[-30:], indicators, signals[-5:])
+    return {"symbol": symbol, "text": text, "indicators": indicators}
 
 
 @app.get("/klines")
@@ -71,7 +137,7 @@ async def klines(
 @app.websocket("/ws")
 async def market_ws(
     websocket: WebSocket,
-    symbol: str = Query("BTC/USDT"),
+    symbol: str = Query("600519"),
     interval: str = Query("1m"),
 ) -> None:
     await websocket.accept()
@@ -124,7 +190,20 @@ async def market_ws(
     try:
         task = asyncio.create_task(pump())
         while True:
-            await websocket.receive_text()
+            raw = await websocket.receive_text()
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if msg.get("type") == "ping":
+                now_ms = int(time.time() * 1000)
+                await websocket.send_json(
+                    {
+                        "type": "pong",
+                        "ts": msg.get("ts", now_ms),
+                        "server_ts": now_ms,
+                    }
+                )
     except WebSocketDisconnect:
         pass
     finally:

@@ -7,6 +7,8 @@ export interface AlertRules {
   bbLower: boolean;
   bbUpper: boolean;
   soundEnabled: boolean;
+  webhookUrl: string;
+  webhookEnabled: boolean;
 }
 
 const STORAGE_KEY = "quantlens-alert-rules";
@@ -18,6 +20,8 @@ export const DEFAULT_ALERT_RULES: AlertRules = {
   bbLower: true,
   bbUpper: false,
   soundEnabled: true,
+  webhookUrl: "",
+  webhookEnabled: false,
 };
 
 export function useAlertRules() {

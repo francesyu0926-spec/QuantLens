@@ -13,6 +13,7 @@ import {
   type CandlestickData,
   type HistogramData,
   type IChartApi,
+  type IPriceLine,
   type ISeriesApi,
   type LineData,
   type SeriesMarker,
@@ -20,6 +21,7 @@ import {
 } from "lightweight-charts";
 import type { AlertSignal, Candle } from "../types/market";
 import type { ChartDisplayOptions } from "../types/chart";
+import type { PriceLineDef } from "../hooks/usePriceLines";
 import { dedupeCandles, sanitizeMarkers } from "../utils/candles";
 import {
   computeBollinger,
@@ -30,9 +32,12 @@ import {
 } from "../utils/indicators";
 
 interface Props {
+  symbol: string;
   candles: Candle[];
   signals: AlertSignal[];
   options: ChartDisplayOptions;
+  priceLines?: PriceLineDef[];
+  onAddPriceLine?: (price: number) => void;
 }
 
 export interface ChartWorkspaceHandle {
@@ -70,7 +75,10 @@ function toLineData(
 }
 
 export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
-  function ChartWorkspace({ candles: rawCandles, signals, options }, ref) {
+  function ChartWorkspace(
+    { symbol, candles: rawCandles, signals, options, priceLines = [], onAddPriceLine },
+    ref
+  ) {
   const candles = useMemo(() => dedupeCandles(rawCandles), [rawCandles]);
   const shellRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLDivElement>(null);
@@ -89,6 +97,7 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
   const macdHist = useRef<ISeriesApi<"Histogram"> | null>(null);
   const rsiSeries = useRef<ISeriesApi<"Line"> | null>(null);
   const didFit = useRef(false);
+  const [chartReady, setChartReady] = useState(false);
   const syncing = useRef(false);
   const [legend, setLegend] = useState<LegendState>({ visible: false });
   const [legendHover, setLegendHover] = useState(false);
@@ -96,6 +105,11 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
   const ema20Ref = useRef<number[]>([]);
   const ema50Ref = useRef<number[]>([]);
   const macdHistRef = useRef<number[]>([]);
+  const priceLineHandles = useRef<IPriceLine[]>([]);
+  const altKey = useRef(false);
+  const addLineRef = useRef(onAddPriceLine);
+  const [focusTime, setFocusTime] = useState<number | null>(null);
+  addLineRef.current = onAddPriceLine;
 
   const closes = useMemo(() => candles.map((c) => c.close), [candles]);
   const ema20 = useMemo(() => ema(closes, 20), [closes]);
@@ -108,24 +122,6 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
   macdHistRef.current = macd.hist;
   const rsi = useMemo(() => computeRsi(closes), [closes]);
 
-  const latestLegend = useMemo((): LegendState => {
-    if (candles.length === 0) return { visible: false };
-    const idx = candles.length - 1;
-    const c = candles[idx];
-    const prevClose = idx > 0 ? candles[idx - 1].close : c.open;
-    const changePct = ((c.close - prevClose) / prevClose) * 100;
-    return {
-      visible: true,
-      time: c.time,
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.close,
-      changePct,
-      ema20: ema20[idx],
-      ema50: ema50[idx],
-    };
-  }, [candles, ema20, ema50]);
 
   const signalMarkers = useMemo((): SeriesMarker<Time>[] => {
     return signals
@@ -160,8 +156,25 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
         from: Math.max(0, idx - Math.floor(span * 0.78)),
         to: Math.min(list.length, idx + Math.floor(span * 0.22)),
       });
+      setFocusTime(time);
+      window.setTimeout(() => setFocusTime(null), 2600);
     },
   }));
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "Alt") altKey.current = true;
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.key === "Alt") altKey.current = false;
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, []);
 
   const resizeCharts = () => {
     const total = shellRef.current?.clientHeight ?? 480;
@@ -203,7 +216,12 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
     const sub = createChart(subRef.current, {
       ...baseOpts,
       height: 96,
-      timeScale: { visible: true, borderColor: "#30363d" },
+      timeScale: {
+        visible: true,
+        borderColor: "#30363d",
+        timeVisible: true,
+        secondsVisible: false,
+      },
     });
 
     const candles_s = main.addCandlestickSeries({
@@ -343,7 +361,14 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
 
     const ro = new ResizeObserver(() => resizeCharts());
     if (shellRef.current) ro.observe(shellRef.current);
+    main.subscribeClick((param) => {
+      if (!altKey.current || !param.point || !candles_s) return;
+      const p = candles_s.coordinateToPrice(param.point.y);
+      if (p != null) addLineRef.current?.(p as number);
+    });
+
     resizeCharts();
+    setChartReady(true);
 
     return () => {
       ro.disconnect();
@@ -352,11 +377,16 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
       mainChart.current = null;
       subChart.current = null;
       didFit.current = false;
+      setChartReady(false);
     };
   }, []);
 
   useEffect(() => {
-    if (!candleSeries.current || candles.length === 0) return;
+    didFit.current = false;
+  }, [symbol]);
+
+  useEffect(() => {
+    if (!chartReady || !candleSeries.current || candles.length === 0) return;
 
     const ohlc: CandlestickData[] = candles.map((c) => ({
       time: c.time as Time,
@@ -374,8 +404,20 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
 
     const times = new Set(candles.map((c) => c.time));
     const histMarkers = emaCrossMarkers(candles);
+    const focusMarkers: SeriesMarker<Time>[] =
+      focusTime != null && times.has(focusTime)
+        ? [
+            {
+              time: focusTime as Time,
+              position: "aboveBar",
+              color: "#58a6ff",
+              shape: "circle",
+              text: "信号",
+            },
+          ]
+        : [];
     const merged = sanitizeMarkers(
-      [...histMarkers, ...signalMarkers].slice(-50),
+      [...histMarkers, ...signalMarkers, ...focusMarkers].slice(-50),
       times
     );
     try {
@@ -407,6 +449,9 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
     if (options.showEma) {
       ema20Series.current?.setData(toLineData(candles, ema20));
       ema50Series.current?.setData(toLineData(candles, ema50));
+    } else {
+      ema20Series.current?.setData([]);
+      ema50Series.current?.setData([]);
     }
 
     const showBoll = options.showBoll;
@@ -417,6 +462,10 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
       bbUp.current?.setData(toLineData(candles, boll.upper));
       bbMid.current?.setData(toLineData(candles, boll.middle));
       bbLow.current?.setData(toLineData(candles, boll.lower));
+    } else {
+      bbUp.current?.setData([]);
+      bbMid.current?.setData([]);
+      bbLow.current?.setData([]);
     }
 
     macdLine.current?.applyOptions({
@@ -454,31 +503,76 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
     } else if (candles.length > 0) {
       chart.timeScale().scrollToRealTime();
     }
-  }, [candles, options, ema20, ema50, boll, macd, rsi, signalMarkers]);
+  }, [
+    chartReady,
+    candles,
+    options,
+    ema20,
+    ema50,
+    boll,
+    macd,
+    rsi,
+    signalMarkers,
+    focusTime,
+  ]);
 
-  const leg = legendHover && legend.close != null ? legend : latestLegend;
+  useEffect(() => {
+    const series = candleSeries.current;
+    if (!series || !chartReady) return;
+    for (const h of priceLineHandles.current) {
+      series.removePriceLine(h);
+    }
+    priceLineHandles.current = priceLines.map((line) =>
+      series.createPriceLine({
+        price: line.price,
+        color: line.color,
+        lineWidth: 2,
+        axisLabelVisible: true,
+        title: line.label,
+      })
+    );
+  }, [priceLines, chartReady, symbol]);
+
+  const leg =
+    legendHover && legend.visible && legend.close != null ? legend : null;
 
   return (
     <div className="chart-workspace" ref={shellRef}>
-      {leg.visible && leg.close != null && (
-        <div className="chart-legend">
-          <span>O {leg.open?.toFixed(2)}</span>
-          <span>H {leg.high?.toFixed(2)}</span>
-          <span>L {leg.low?.toFixed(2)}</span>
-          <span>C {leg.close.toFixed(2)}</span>
-          <span className={(leg.changePct ?? 0) >= 0 ? "leg-up" : "leg-down"}>
-            {(leg.changePct ?? 0) >= 0 ? "+" : ""}
-            {(leg.changePct ?? 0).toFixed(2)}%
-          </span>
+      {leg && (
+        <div className="chart-legend chart-legend-hover">
+          <div className="legend-ohlc">
+            <span className="leg-o">
+              <em>O</em> {leg.open?.toFixed(2)}
+            </span>
+            <span className="leg-h">
+              <em>H</em> {leg.high?.toFixed(2)}
+            </span>
+            <span className="leg-l">
+              <em>L</em> {leg.low?.toFixed(2)}
+            </span>
+            <span className="leg-c">
+              <em>C</em> {leg.close!.toFixed(2)}
+            </span>
+            <span
+              className={`leg-chg ${
+                (leg.changePct ?? 0) >= 0 ? "leg-up" : "leg-down"
+              }`}
+            >
+              {(leg.changePct ?? 0) >= 0 ? "+" : ""}
+              {(leg.changePct ?? 0).toFixed(2)}%
+            </span>
+          </div>
           {options.showEma && (
-            <>
+            <div className="legend-ema">
               <span className="leg-ema20">
+                <i className="swatch swatch-ema20" />
                 EMA20 {leg.ema20?.toFixed(2) ?? "—"}
               </span>
               <span className="leg-ema50">
+                <i className="swatch swatch-ema50" />
                 EMA50 {leg.ema50?.toFixed(2) ?? "—"}
               </span>
-            </>
+            </div>
           )}
         </div>
       )}
