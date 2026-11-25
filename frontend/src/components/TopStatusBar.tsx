@@ -139,11 +139,12 @@ export function TopStatusBar({
         <button
           type="button"
           className={`top-btn top-btn-novice${noviceMode ? " on" : ""}`}
-          title="开启后用白话解读盘面与指标"
+          title="开启后显示指标白话解读与盘面提示"
           aria-pressed={noviceMode}
           onClick={onToggleNovice}
         >
-          白话
+          <span className="novice-led" aria-hidden />
+          智能解读
         </button>
         <button type="button" className="top-btn top-btn-ai" onClick={onDiagnose}>
           <span className="top-btn-spark" aria-hidden>

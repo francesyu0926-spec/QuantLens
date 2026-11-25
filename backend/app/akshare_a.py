@@ -115,17 +115,34 @@ def _resample_candles(candles: list[Candle], bucket_sec: int) -> list[Candle]:
     return [buckets[k] for k in sorted(buckets)]
 
 
+def _fetch_sina_minute(code: str, period: str) -> list[Candle]:
+    import akshare as ak
+
+    df = ak.stock_zh_a_minute(symbol=sina_prefix(code), period=period, adjust="")
+    return _df_to_candles(df)
+
+
 def _fetch_etf_daily(code: str) -> list[Candle]:
     import akshare as ak
 
-    df = ak.fund_etf_hist_em(
-        symbol=code,
-        period="daily",
-        start_date="20220101",
-        end_date="20500101",
-        adjust="qfq",
-    )
+    try:
+        df = ak.fund_etf_hist_em(
+            symbol=code,
+            period="daily",
+            start_date="20220101",
+            end_date="20500101",
+            adjust="qfq",
+        )
+    except Exception as exc:
+        logger.warning("AKShare ETF daily fetch failed %s: %s", code, exc)
+        df = None
     if df is None or df.empty:
+        try:
+            minute = _fetch_sina_minute(code, "1")
+            if minute:
+                return _resample_candles(minute, 86_400)[-500:]
+        except Exception as exc:
+            logger.warning("ETF daily sina fallback failed %s: %s", code, exc)
         return []
 
     candles: list[Candle] = []
@@ -206,6 +223,12 @@ def fetch_bars(code: str, interval: str = "1m") -> list[Candle]:
 
     if is_listed_etf(code):
         try:
+            candles = _fetch_sina_minute(code, period)
+        except Exception as exc:
+            errors.append(f"sina: {exc}")
+
+    if not candles and is_listed_etf(code):
+        try:
             df = ak.fund_etf_hist_min_em(symbol=code, period=period, adjust="")
             candles = _df_to_candles(df)
         except Exception as exc:
@@ -220,10 +243,9 @@ def fetch_bars(code: str, interval: str = "1m") -> list[Candle]:
 
     if not candles:
         try:
-            df = ak.stock_zh_a_minute(symbol=sina_prefix(code), period=period, adjust="")
-            candles = _df_to_candles(df)
+            candles = _fetch_sina_minute(code, period)
         except Exception as exc:
-            errors.append(f"sina: {exc}")
+            errors.append(f"sina-retry: {exc}")
 
     if not candles and is_listed_etf(code):
         try:

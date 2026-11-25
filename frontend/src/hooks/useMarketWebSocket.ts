@@ -13,8 +13,8 @@ import {
 
 const WS_URL = import.meta.env.VITE_WS_URL ?? "ws://127.0.0.1:8765/ws";
 const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8765";
-const LOAD_TIMEOUT_MS = 5_000;
-const REST_TIMEOUT_MS = 12_000;
+const LOAD_TIMEOUT_MS = 18_000;
+const REST_TIMEOUT_MS = 20_000;
 
 export interface ConnectionMeta {
   lastHeartbeat: number;
@@ -175,7 +175,8 @@ export function useMarketWebSocket(symbol: string, interval: string) {
           setState((s) => ({
             ...s,
             loading: false,
-            loadError: "K 线为空，请重试或切换数据源",
+            loadError:
+              "K 线为空（数据源繁忙或限流），请稍后点「重新加载」",
           }));
         }
       } catch {

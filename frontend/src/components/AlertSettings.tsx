@@ -1,8 +1,17 @@
+import { useEffect, useState } from "react";
 import type { AlertRules } from "../hooks/useAlertRules";
 import {
   PRICE_COLOR_MODE_LABEL,
   type PriceColorMode,
 } from "../utils/priceColors";
+
+const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8765";
+
+const PRICE_MODE_SHORT: Record<PriceColorMode, string> = {
+  auto: "自动",
+  cn_red_up: "红涨绿跌",
+  intl_green_up: "绿涨红跌",
+};
 
 interface Props {
   open: boolean;
@@ -13,7 +22,7 @@ interface Props {
   onPriceColorMode: (m: PriceColorMode) => void;
 }
 
-function ToggleRow({
+function M3Switch({
   label,
   checked,
   onChange,
@@ -23,15 +32,36 @@ function ToggleRow({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="alert-row">
-      <span>{label}</span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
+    <div className="settings-switch-row">
+      <span className="settings-switch-label">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        className={`m3-switch${checked ? " on" : ""}`}
+        onClick={() => onChange(!checked)}
       />
-    </label>
+    </div>
   );
+}
+
+async function testWebhook(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API}/webhook/relay`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url,
+        title: "QuantLens 测试",
+        text: "Webhook 连通性测试",
+      }),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { ok?: boolean };
+    return Boolean(data.ok);
+  } catch {
+    return false;
+  }
 }
 
 export function AlertSettings({
@@ -42,82 +72,152 @@ export function AlertSettings({
   priceColorMode,
   onPriceColorMode,
 }: Props) {
+  const [testState, setTestState] = useState<"idle" | "ok" | "fail">("idle");
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
+
+  const runWebhookTest = async () => {
+    const url = rules.webhookUrl.trim();
+    if (!url) {
+      setTestState("fail");
+      return;
+    }
+    setTestState("idle");
+    const ok = await testWebhook(url);
+    setTestState(ok ? "ok" : "fail");
+    window.setTimeout(() => setTestState("idle"), 2000);
+  };
+
   return (
     <div className="modal-backdrop" onClick={onClose} role="presentation">
       <section
-        className="alert-modal"
+        className="alert-modal settings-modal"
         onClick={(e) => e.stopPropagation()}
-        aria-label="预警规则"
+        aria-label="系统设置"
       >
-        <header>
-          <h3>设置</h3>
-          <button type="button" className="chip" onClick={onClose}>
-            关闭
+        <header className="settings-modal-header">
+          <h3 className="settings-modal-title">系统设置</h3>
+          <button
+            type="button"
+            className="settings-close-btn"
+            aria-label="关闭"
+            onClick={onClose}
+          >
+            ✕
           </button>
         </header>
-        <fieldset className="color-mode-field">
-          <legend>涨跌配色</legend>
-          {(Object.keys(PRICE_COLOR_MODE_LABEL) as PriceColorMode[]).map(
-            (key) => (
-              <label key={key} className="alert-row color-mode-row">
-                <input
-                  type="radio"
-                  name="price-color-mode"
-                  checked={priceColorMode === key}
-                  onChange={() => onPriceColorMode(key)}
-                />
-                <span>{PRICE_COLOR_MODE_LABEL[key]}</span>
-              </label>
-            )
-          )}
-        </fieldset>
-        <h4 className="settings-section">预警规则</h4>
-        <ToggleRow
-          label="EMA 金叉 / 死叉"
-          checked={rules.emaCross}
-          onChange={(v) => onChange({ ...rules, emaCross: v })}
-        />
-        <ToggleRow
-          label="RSI(14) < 30 超卖"
-          checked={rules.rsiOversold}
-          onChange={(v) => onChange({ ...rules, rsiOversold: v })}
-        />
-        <ToggleRow
-          label="RSI(14) > 70 超买"
-          checked={rules.rsiOverbought}
-          onChange={(v) => onChange({ ...rules, rsiOverbought: v })}
-        />
-        <ToggleRow
-          label="跌破布林下轨"
-          checked={rules.bbLower}
-          onChange={(v) => onChange({ ...rules, bbLower: v })}
-        />
-        <ToggleRow
-          label="突破布林上轨"
-          checked={rules.bbUpper}
-          onChange={(v) => onChange({ ...rules, bbUpper: v })}
-        />
-        <ToggleRow
-          label="触发时播放提示音"
-          checked={rules.soundEnabled}
-          onChange={(v) => onChange({ ...rules, soundEnabled: v })}
-        />
-        <ToggleRow
-          label="推送到 Webhook（Server酱 / 飞书 / 钉钉等）"
-          checked={rules.webhookEnabled}
-          onChange={(v) => onChange({ ...rules, webhookEnabled: v })}
-        />
-        <label className="alert-row">
-          <span>Webhook URL</span>
-          <input
-            type="url"
-            className="webhook-input"
-            placeholder="https://..."
-            value={rules.webhookUrl}
-            onChange={(e) => onChange({ ...rules, webhookUrl: e.target.value })}
+
+        <div className="settings-card">
+          <h4 className="settings-card-title">外观与显示</h4>
+          <p className="settings-card-hint muted">涨跌配色</p>
+          <div
+            className="settings-color-segment"
+            role="radiogroup"
+            aria-label="涨跌配色"
+          >
+            {(Object.keys(PRICE_COLOR_MODE_LABEL) as PriceColorMode[]).map(
+              (key) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="radio"
+                  aria-checked={priceColorMode === key}
+                  title={PRICE_COLOR_MODE_LABEL[key]}
+                  className={`settings-segment-btn${
+                    priceColorMode === key ? " on" : ""
+                  }`}
+                  onClick={() => onPriceColorMode(key)}
+                >
+                  {PRICE_MODE_SHORT[key]}
+                </button>
+              )
+            )}
+          </div>
+        </div>
+
+        <div className="settings-card">
+          <h4 className="settings-card-title">策略预警条件</h4>
+          <div className="settings-rule-grid">
+            <M3Switch
+              label="EMA 金叉 / 死叉"
+              checked={rules.emaCross}
+              onChange={(v) => onChange({ ...rules, emaCross: v })}
+            />
+            <M3Switch
+              label="RSI(14) < 30 超卖"
+              checked={rules.rsiOversold}
+              onChange={(v) => onChange({ ...rules, rsiOversold: v })}
+            />
+            <M3Switch
+              label="RSI(14) > 70 超买"
+              checked={rules.rsiOverbought}
+              onChange={(v) => onChange({ ...rules, rsiOverbought: v })}
+            />
+            <M3Switch
+              label="跌破布林下轨"
+              checked={rules.bbLower}
+              onChange={(v) => onChange({ ...rules, bbLower: v })}
+            />
+            <M3Switch
+              label="突破布林上轨"
+              checked={rules.bbUpper}
+              onChange={(v) => onChange({ ...rules, bbUpper: v })}
+            />
+          </div>
+        </div>
+
+        <div className="settings-card">
+          <h4 className="settings-card-title">通知与推送</h4>
+          <M3Switch
+            label="触发时播放提示音"
+            checked={rules.soundEnabled}
+            onChange={(v) => onChange({ ...rules, soundEnabled: v })}
           />
-        </label>
+          <M3Switch
+            label="推送到 Webhook"
+            checked={rules.webhookEnabled}
+            onChange={(v) => onChange({ ...rules, webhookEnabled: v })}
+          />
+          {rules.webhookEnabled && (
+            <div className="settings-webhook-block">
+              <label className="settings-webhook-field">
+                <span className="settings-card-hint muted">Webhook URL</span>
+                <div className="settings-webhook-input-wrap">
+                  <input
+                    type="url"
+                    className="settings-webhook-input"
+                    placeholder="https://..."
+                    value={rules.webhookUrl}
+                    onChange={(e) => {
+                      setTestState("idle");
+                      onChange({ ...rules, webhookUrl: e.target.value });
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="settings-webhook-test"
+                    onClick={() => void runWebhookTest()}
+                  >
+                    {testState === "ok"
+                      ? "已发送"
+                      : testState === "fail"
+                        ? "失败"
+                        : "测试"}
+                  </button>
+                </div>
+              </label>
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );

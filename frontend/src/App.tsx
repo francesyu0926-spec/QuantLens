@@ -218,11 +218,14 @@ export default function App() {
   const [showBanner, setShowBanner] = useState(false);
 
   const chartReady = market.candles.length > 0;
-  const fallback = chartCache.current.get(
-    cacheKey(lastReadySymbol.current, interval)
-  );
-  const displayCandles = chartReady ? market.candles : fallback?.candles ?? [];
-  const chartViewSymbol = chartReady ? symbol : lastReadySymbol.current;
+  const sameSymbolCache =
+    symbol === lastReadySymbol.current
+      ? chartCache.current.get(cacheKey(symbol, interval))
+      : undefined;
+  const displayCandles = chartReady
+    ? market.candles
+    : sameSymbolCache?.candles ?? [];
+  const chartViewSymbol = chartReady ? symbol : symbol;
   const switchPending =
     !chartReady && (market.loading || Boolean(market.loadError));
 
