@@ -1,15 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { AlertSettings } from "./components/AlertSettings";
 import { ChartErrorBoundary } from "./components/ChartErrorBoundary";
 import { ChartLoadOverlay } from "./components/ChartLoadOverlay";
-import { ConnectionStatusCapsule } from "./components/ConnectionStatusCapsule";
-import { ChartPriceActions } from "./components/ChartPriceActions";
+import { TopStatusBar } from "./components/TopStatusBar";
 import { ChartToolbar } from "./components/ChartToolbar";
 import {
   ChartWorkspace,
   type ChartWorkspaceHandle,
 } from "./components/ChartWorkspace";
-import { IndicatorPanel } from "./components/IndicatorPanel";
 import { AiDiagnoseModal } from "./components/AiDiagnoseModal";
 import { ErrorBanner } from "./components/ErrorBanner";
 import { MultiTimeframeRadar } from "./components/MultiTimeframeRadar";
@@ -28,7 +26,8 @@ import {
 import type { AlertSignal, Candle, WatchlistItem } from "./types/market";
 import { usePersistedWatchlist } from "./hooks/usePersistedWatchlist";
 import { usePriceLines } from "./hooks/usePriceLines";
-import { DEFAULT_SYMBOL, A_SHARE_ONLY } from "./config/market";
+import { usePriceColorScheme } from "./hooks/usePriceColorScheme";
+import { DEFAULT_SYMBOL } from "./config/market";
 import { backfillEmaSignals } from "./utils/signalHistory";
 
 const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8765";
@@ -69,10 +68,14 @@ export default function App() {
   const [chartOptions, setChartOptions] =
     useState<ChartDisplayOptions>(DEFAULT_CHART_OPTIONS);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [leftPanelOpen, setLeftPanelOpen] = useState(true);
+  const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [diagnoseOpen, setDiagnoseOpen] = useState(false);
   const [signalScope, setSignalScope] = useState<SignalScope>("current");
   const [watchlistSignals, setWatchlistSignals] = useState<AlertSignal[]>([]);
   const { rules, setRules } = useAlertRules();
+  const { mode: priceColorMode, setMode: setPriceColorMode, colors: priceColors } =
+    usePriceColorScheme(symbol);
   const { items: watchlistSeed, addSymbol, symbolList } = usePersistedWatchlist();
   const { lines: priceLines, addLine, removeLine } = usePriceLines(symbol);
   const pushedSignals = useRef(new Set<string>());
@@ -132,7 +135,7 @@ export default function App() {
   const showStale = switchPending && displayCandles.length > 0;
 
   const allSignals = useMemo((): AlertSignal[] => {
-    const hist = backfillEmaSignals(chartViewSymbol, displayCandles, 40);
+    const hist = backfillEmaSignals(chartViewSymbol, displayCandles, 12);
     const live = market.signals.filter((s) => s.symbol === chartViewSymbol);
     const seen = new Set<string>();
     const merged: AlertSignal[] = [];
@@ -259,8 +262,8 @@ export default function App() {
     });
   }, [quotes, symbol, effectivePrice, market.candles, watchlistSeed]);
 
-  const displayPrice =
-    effectivePrice > 0 ? effectivePrice.toFixed(2) : "—";
+  const activeName =
+    watchlistSeed.find((i) => i.symbol === symbol)?.name ?? symbol;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -268,6 +271,12 @@ export default function App() {
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
       ) {
+        return;
+      }
+      if (e.key === "f" || e.key === "F") {
+        const both = leftPanelOpen && rightPanelOpen;
+        setLeftPanelOpen(!both);
+        setRightPanelOpen(!both);
         return;
       }
       const n = Number(e.key);
@@ -287,55 +296,31 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [symbol, symbolList]);
+  }, [symbol, symbolList, leftPanelOpen, rightPanelOpen]);
 
-  const marketLabel = A_SHARE_ONLY
-    ? "A股 交易时段"
-    : symbol.includes("/")
-      ? "加密 7×24"
-      : /^\d{6}$/.test(symbol)
-        ? "A股 交易时段"
-        : "美股 交易时段";
+  const shellStyle = {
+    "--color-price-up": priceColors.up,
+    "--color-price-down": priceColors.down,
+  } as CSSProperties;
 
   return (
-    <div className="app-shell">
-      <header className="top-bar">
-        <div className="brand-cluster">
-          <h1>QuantLens</h1>
-          <ConnectionStatusCapsule
-            loadError={market.loadError}
-            loading={market.loading}
-            chartReady={chartReady}
-            symbol={symbol}
-            meta={market.connectionMeta}
-            onReconnect={market.retry}
-          />
-        </div>
-        <div className="symbol-cluster">
-          <span
-            className={`pill pill-symbol${
-              !chartReady && switchPending ? " pill-stale" : ""
-            }`}
-          >
-            {!chartReady && switchPending && (
-              <span className="disc" title="当前标的暂无行情" aria-hidden>
-                ●
-              </span>
-            )}
-            {symbol}
-          </span>
-          <span className="pill pill-interval">{interval}</span>
-          <span className="pill pill-market">{marketLabel}</span>
-        </div>
-        <button
-          type="button"
-          className="chip"
-          onClick={() => setDiagnoseOpen(true)}
-        >
-          AI 诊断
-        </button>
-        <span className="live-price">{displayPrice}</span>
-      </header>
+    <div className="app-shell" style={shellStyle}>
+      <TopStatusBar
+        symbol={symbol}
+        symbolName={activeName}
+        interval={interval}
+        loadError={market.loadError}
+        loading={market.loading}
+        chartReady={chartReady}
+        switchPending={switchPending}
+        connectionMeta={market.connectionMeta}
+        onReconnect={market.retry}
+        onDiagnose={() => setDiagnoseOpen(true)}
+        onSettings={() => setSettingsOpen(true)}
+        effectivePrice={effectivePrice}
+        displayCandles={displayCandles}
+        quotes={quotes}
+      />
 
       {showBanner && market.loadError && (
         <ErrorBanner
@@ -349,33 +334,42 @@ export default function App() {
         />
       )}
 
-      <div className="layout">
-        <Watchlist
-          items={watchlist}
-          active={symbol}
-          onSelect={setSymbol}
-          onAddSymbol={addSymbol}
-          quotesLoading={quotesLoading}
-          onVisibleSymbols={setVisibleWatchSymbols}
-        />
+      <div
+        className={`layout${leftPanelOpen ? "" : " collapsed-left"}${rightPanelOpen ? "" : " collapsed-right"}`}
+      >
+        <aside className="panel-shell panel-shell-left">
+          <button
+            type="button"
+            className="panel-fold panel-fold-left"
+            title={leftPanelOpen ? "收起自选 (F 专注)" : "展开自选"}
+            onClick={() => setLeftPanelOpen((o) => !o)}
+          >
+            {leftPanelOpen ? "◂" : "▸"}
+          </button>
+          {leftPanelOpen && (
+            <Watchlist
+              items={watchlist}
+              active={symbol}
+              onSelect={setSymbol}
+              onAddSymbol={addSymbol}
+              quotesLoading={quotesLoading}
+              onVisibleSymbols={setVisibleWatchSymbols}
+              priceColors={priceColors}
+            />
+          )}
+        </aside>
         <main className="chart-area">
           <ChartToolbar
             interval={interval}
             onInterval={setInterval}
             options={chartOptions}
             onOptions={setChartOptions}
-          />
-          <ChartPriceActions
             price={effectivePrice}
             lines={priceLines}
-            onAdd={addLine}
-            onRemove={removeLine}
+            onAddLine={addLine}
+            onRemoveLine={removeLine}
           />
           <MultiTimeframeRadar symbol={symbol} />
-          <IndicatorPanel
-            indicators={market.indicators}
-            price={effectivePrice}
-          />
           <div className="chart-stack">
             {showStale && (
               <span className="delayed-tag">延迟 · {chartViewSymbol}</span>
@@ -403,29 +397,41 @@ export default function App() {
                   signals={allSignals}
                   options={chartOptions}
                   priceLines={priceLines}
+                  priceColors={priceColors}
                   onAddPriceLine={(p) => addLine(p, "关键价位")}
                 />
               </ChartErrorBoundary>
             )}
           </div>
         </main>
-        <RightDock
-          symbol={chartViewSymbol}
-          price={effectivePrice}
-          candles={displayCandles}
-          signals={displaySignals}
-          rules={rules}
-          scope={signalScope}
-          onScopeChange={setSignalScope}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onPickSignal={(sig) => {
-            if (sig.symbol !== symbol) setSymbol(sig.symbol);
-            const t = sig.bar_time;
-            if (t != null) {
-              window.setTimeout(() => chartRef.current?.scrollToBar(t), 80);
-            }
-          }}
-        />
+        <aside className="panel-shell panel-shell-right">
+          <button
+            type="button"
+            className="panel-fold panel-fold-right"
+            title={rightPanelOpen ? "收起侧栏 (F 专注)" : "展开侧栏"}
+            onClick={() => setRightPanelOpen((o) => !o)}
+          >
+            {rightPanelOpen ? "▸" : "◂"}
+          </button>
+          {rightPanelOpen && (
+            <RightDock
+              symbol={chartViewSymbol}
+              price={effectivePrice}
+              candles={displayCandles}
+              signals={displaySignals}
+              rules={rules}
+              scope={signalScope}
+              onScopeChange={setSignalScope}
+              onPickSignal={(sig) => {
+                if (sig.symbol !== symbol) setSymbol(sig.symbol);
+                const t = sig.bar_time;
+                if (t != null) {
+                  window.setTimeout(() => chartRef.current?.scrollToBar(t), 80);
+                }
+              }}
+            />
+          )}
+        </aside>
       </div>
 
       {diagnoseOpen && (
@@ -441,6 +447,8 @@ export default function App() {
         rules={rules}
         onChange={setRules}
         onClose={() => setSettingsOpen(false)}
+        priceColorMode={priceColorMode}
+        onPriceColorMode={setPriceColorMode}
       />
 
     </div>

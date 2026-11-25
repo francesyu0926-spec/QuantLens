@@ -21,7 +21,6 @@ interface Props {
   rules: AlertRules;
   scope: SignalScope;
   onScopeChange: (s: SignalScope) => void;
-  onOpenSettings: () => void;
   onPickSignal?: (s: AlertSignal) => void;
 }
 
@@ -33,7 +32,6 @@ export function RightDock({
   rules,
   scope,
   onScopeChange,
-  onOpenSettings,
   onPickSignal,
 }: Props) {
   const [tab, setTab] = useState<Tab>("signals");
@@ -114,7 +112,6 @@ export function RightDock({
           rules={rules}
           scope={scope}
           onScopeChange={onScopeChange}
-          onOpenSettings={onOpenSettings}
           onPick={onPickSignal}
         />
       )}

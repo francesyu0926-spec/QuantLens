@@ -1,10 +1,16 @@
 import type { AlertRules } from "../hooks/useAlertRules";
+import {
+  PRICE_COLOR_MODE_LABEL,
+  type PriceColorMode,
+} from "../utils/priceColors";
 
 interface Props {
   open: boolean;
   rules: AlertRules;
   onChange: (r: AlertRules) => void;
   onClose: () => void;
+  priceColorMode: PriceColorMode;
+  onPriceColorMode: (m: PriceColorMode) => void;
 }
 
 function ToggleRow({
@@ -28,7 +34,14 @@ function ToggleRow({
   );
 }
 
-export function AlertSettings({ open, rules, onChange, onClose }: Props) {
+export function AlertSettings({
+  open,
+  rules,
+  onChange,
+  onClose,
+  priceColorMode,
+  onPriceColorMode,
+}: Props) {
   if (!open) return null;
   return (
     <div className="modal-backdrop" onClick={onClose} role="presentation">
@@ -38,11 +51,28 @@ export function AlertSettings({ open, rules, onChange, onClose }: Props) {
         aria-label="预警规则"
       >
         <header>
-          <h3>预警规则</h3>
+          <h3>设置</h3>
           <button type="button" className="chip" onClick={onClose}>
             关闭
           </button>
         </header>
+        <fieldset className="color-mode-field">
+          <legend>涨跌配色</legend>
+          {(Object.keys(PRICE_COLOR_MODE_LABEL) as PriceColorMode[]).map(
+            (key) => (
+              <label key={key} className="alert-row color-mode-row">
+                <input
+                  type="radio"
+                  name="price-color-mode"
+                  checked={priceColorMode === key}
+                  onChange={() => onPriceColorMode(key)}
+                />
+                <span>{PRICE_COLOR_MODE_LABEL[key]}</span>
+              </label>
+            )
+          )}
+        </fieldset>
+        <h4 className="settings-section">预警规则</h4>
         <ToggleRow
           label="EMA 金叉 / 死叉"
           checked={rules.emaCross}

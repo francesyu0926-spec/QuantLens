@@ -5,7 +5,6 @@ export type SignalScope = "current" | "watchlist";
 
 interface Props {
   signals: AlertSignal[];
-  onOpenSettings: () => void;
   rules: AlertRules;
   onPick?: (signal: AlertSignal) => void;
   scope: SignalScope;
@@ -53,14 +52,20 @@ function ruleEnabled(rule: string, rules: AlertRules, message: string): boolean 
 
 export function SignalLog({
   signals,
-  onOpenSettings,
   rules,
   onPick,
   scope,
   onScopeChange,
   className,
 }: Props) {
-  const visible = signals.filter((s) => ruleEnabled(s.rule, rules, s.message));
+  const visible = signals
+    .filter((s) => ruleEnabled(s.rule, rules, s.message))
+    .slice(0, 5);
+
+  const stripHist = (msg: string) =>
+    msg.replace(/^\[历史\]\s*/, "").replace(/^\[盘中预警\]\s*/, "");
+
+  const isLive = (msg: string) => msg.startsWith("[盘中预警]");
 
   return (
     <section className={`signal-log${className ? ` ${className}` : ""}`}>
@@ -83,14 +88,6 @@ export function SignalLog({
               自选
             </button>
           </div>
-          <button
-            type="button"
-            className="chip icon-btn"
-            title="预警规则"
-            onClick={onOpenSettings}
-          >
-            ⚙
-          </button>
         </div>
       </header>
       <div className="log-scroll">
@@ -115,7 +112,14 @@ export function SignalLog({
               }}
             >
               <div className="signal-row signal-row-top">
-                <span className="signal-msg">{sig.message}</span>
+                <span className="signal-msg">
+                  {isLive(sig.message) && (
+                    <span className="signal-new-dot" title="新触发">
+                      NEW
+                    </span>
+                  )}
+                  {stripHist(sig.message)}
+                </span>
                 <time>{formatSignalTime(sig)}</time>
               </div>
               <div className="signal-row signal-row-bot">

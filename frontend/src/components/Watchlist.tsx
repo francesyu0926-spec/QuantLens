@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { A_SHARE_ONLY } from "../config/market";
+import { isAShareSessionOpen } from "../utils/marketSession";
+import type { PriceColors } from "../utils/priceColors";
 import type { WatchlistItem } from "../types/market";
 
 const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8765";
@@ -11,6 +13,7 @@ interface Props {
   onAddSymbol?: (symbol: string, name: string) => void;
   quotesLoading?: boolean;
   onVisibleSymbols?: (symbols: string[]) => void;
+  priceColors: PriceColors;
 }
 
 type GroupKey = "crypto" | "us" | "a_share";
@@ -33,7 +36,13 @@ function classify(symbol: string): GroupKey {
   return "us";
 }
 
-function Sparkline({ values }: { values?: number[] }) {
+function Sparkline({
+  values,
+  colors,
+}: {
+  values?: number[];
+  colors: PriceColors;
+}) {
   if (!values || values.length < 2) {
     return null;
   }
@@ -53,7 +62,7 @@ function Sparkline({ values }: { values?: number[] }) {
       <polyline
         points={pts}
         fill="none"
-        stroke={up ? "#3fb950" : "#f85149"}
+        stroke={up ? colors.up : colors.down}
         strokeWidth="1.2"
       />
     </svg>
@@ -64,10 +73,12 @@ function Row({
   item,
   active,
   onSelect,
+  priceColors,
 }: {
   item: WatchlistItem;
   active: string;
   onSelect: (s: string) => void;
+  priceColors: PriceColors;
 }) {
   return (
     <li className="watch-li" data-symbol={item.symbol}>
@@ -84,7 +95,7 @@ function Row({
             {item.name || "—"}
           </span>
         </div>
-        <Sparkline values={item.sparkline} />
+        <Sparkline values={item.sparkline} colors={priceColors} />
         <div className="watch-quote">
           <span className="px">
             {item.price == null || item.price <= 0
@@ -117,9 +128,11 @@ export function Watchlist({
   onAddSymbol,
   quotesLoading,
   onVisibleSymbols,
+  priceColors,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
+  const sessionOpen = isAShareSessionOpen();
   const [remoteHits, setRemoteHits] = useState<SearchHit[]>([]);
   const activeGroup = classify(active);
   const [collapsed, setCollapsed] = useState<Record<GroupKey, boolean>>({
@@ -246,7 +259,7 @@ export function Watchlist({
       <p className="watch-hint muted">
         已加载 {items.length} 标的 · 支持全市场搜索
       </p>
-      {quotesLoading && (
+      {quotesLoading && sessionOpen && (
         <p className="quotes-status">实时报价获取中…</p>
       )}
       <div className="watch-scroll" ref={scrollRef}>
@@ -305,6 +318,7 @@ export function Watchlist({
                       item={item}
                       active={active}
                       onSelect={onSelect}
+                      priceColors={priceColors}
                     />
                   ))}
                 </ul>

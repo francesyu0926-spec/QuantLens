@@ -19,6 +19,7 @@ import {
   type SeriesMarker,
   type Time,
 } from "lightweight-charts";
+import type { PriceColors } from "../utils/priceColors";
 import type { AlertSignal, Candle } from "../types/market";
 import type { ChartDisplayOptions } from "../types/chart";
 import type { PriceLineDef } from "../hooks/usePriceLines";
@@ -38,6 +39,7 @@ interface Props {
   options: ChartDisplayOptions;
   priceLines?: PriceLineDef[];
   onAddPriceLine?: (price: number) => void;
+  priceColors: PriceColors;
 }
 
 export interface ChartWorkspaceHandle {
@@ -54,6 +56,14 @@ interface LegendState {
   changePct?: number;
   ema20?: number;
   ema50?: number;
+}
+
+function hexAlpha(hex: string, alpha: number): string {
+  const n = hex.replace("#", "");
+  const r = parseInt(n.slice(0, 2), 16);
+  const g = parseInt(n.slice(2, 4), 16);
+  const b = parseInt(n.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 const AUX_LINE = {
@@ -76,7 +86,15 @@ function toLineData(
 
 export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
   function ChartWorkspace(
-    { symbol, candles: rawCandles, signals, options, priceLines = [], onAddPriceLine },
+    {
+      symbol,
+      candles: rawCandles,
+      signals,
+      options,
+      priceLines = [],
+      onAddPriceLine,
+      priceColors,
+    },
     ref
   ) {
   const candles = useMemo(() => dedupeCandles(rawCandles), [rawCandles]);
@@ -132,12 +150,12 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
         return {
           time: (candle?.time ?? Math.floor(s.ts / 1000)) as Time,
           position: "belowBar" as const,
-          color: "#3fb950",
+          color: priceColors.up,
           shape: "arrowUp" as const,
-          text: "金叉",
+          text: "",
         };
       });
-  }, [signals, candles]);
+  }, [signals, candles, priceColors.up]);
 
   useImperativeHandle(ref, () => ({
     scrollToBar: (time: number) => {
@@ -194,6 +212,7 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
       layout: {
         background: { type: ColorType.Solid, color: "#0d1117" },
         textColor: "#8b949e",
+        attributionLogo: false,
       },
       grid: {
         vertLines: { color: "#21262d" },
@@ -225,11 +244,11 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
     });
 
     const candles_s = main.addCandlestickSeries({
-      upColor: "#3fb950",
-      downColor: "#f85149",
+      upColor: priceColors.up,
+      downColor: priceColors.down,
       borderVisible: false,
-      wickUpColor: "#3fb950",
-      wickDownColor: "#f85149",
+      wickUpColor: priceColors.up,
+      wickDownColor: priceColors.down,
       priceLineVisible: true,
       lastValueVisible: true,
     });
@@ -382,6 +401,16 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
   }, []);
 
   useEffect(() => {
+    if (!candleSeries.current) return;
+    candleSeries.current.applyOptions({
+      upColor: priceColors.up,
+      downColor: priceColors.down,
+      wickUpColor: priceColors.up,
+      wickDownColor: priceColors.down,
+    });
+  }, [priceColors]);
+
+  useEffect(() => {
     didFit.current = false;
   }, [symbol]);
 
@@ -403,7 +432,7 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
     }
 
     const times = new Set(candles.map((c) => c.time));
-    const histMarkers = emaCrossMarkers(candles);
+    const histMarkers = emaCrossMarkers(candles, priceColors);
     const focusMarkers: SeriesMarker<Time>[] =
       focusTime != null && times.has(focusTime)
         ? [
@@ -434,8 +463,8 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
             value: c.volume,
             color:
               c.close >= c.open
-                ? "rgba(63,185,80,0.45)"
-                : "rgba(248,81,73,0.45)",
+                ? hexAlpha(priceColors.up, 0.45)
+                : hexAlpha(priceColors.down, 0.45),
           })) as HistogramData<Time>[]
         );
         volSeries.current.applyOptions({ visible: true });
@@ -488,7 +517,7 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
         candles.map((c, i) => ({
           time: c.time as Time,
           value: macd.hist[i],
-          color: macd.hist[i] >= 0 ? "#3fb950" : "#f85149",
+          color: macd.hist[i] >= 0 ? priceColors.up : priceColors.down,
         }))
       );
     } else {
@@ -514,6 +543,7 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
     rsi,
     signalMarkers,
     focusTime,
+    priceColors,
   ]);
 
   useEffect(() => {
@@ -577,7 +607,21 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
         </div>
       )}
       <div className="chart-main" ref={mainRef} />
-      <div className="chart-sub" ref={subRef} />
+      <div className="chart-sub-wrap">
+        <div className="chart-sub" ref={subRef} />
+        {options.subChart === "macd" && candles.length > 0 && (
+          <div className="sub-ind-legend" aria-hidden>
+            MACD{" "}
+            {macd.macd[macd.macd.length - 1]?.toFixed(3) ?? "—"} · Sig{" "}
+            {macd.signal[macd.signal.length - 1]?.toFixed(3) ?? "—"}
+          </div>
+        )}
+        {options.subChart === "rsi" && candles.length > 0 && (
+          <div className="sub-ind-legend" aria-hidden>
+            RSI {rsi[rsi.length - 1]?.toFixed(2) ?? "—"}
+          </div>
+        )}
+      </div>
     </div>
   );
 });

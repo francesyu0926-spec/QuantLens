@@ -73,7 +73,10 @@ export function computeRsi(closes: number[], period = 14): number[] {
   return rsi;
 }
 
-export function emaCrossMarkers(candles: Candle[]): SeriesMarker<Time>[] {
+export function emaCrossMarkers(
+  candles: Candle[],
+  colors: { up: string; down: string } = { up: "#3fb950", down: "#f85149" }
+): SeriesMarker<Time>[] {
   if (candles.length < 3) return [];
   const closes = candles.map((c) => c.close);
   const e20 = ema(closes, 20);
@@ -88,17 +91,17 @@ export function emaCrossMarkers(candles: Candle[]): SeriesMarker<Time>[] {
       markers.push({
         time: t,
         position: "belowBar",
-        color: "#3fb950",
+        color: colors.up,
         shape: "arrowUp",
-        text: "金叉",
+        text: "",
       });
     } else if (prev >= 0 && cur < 0) {
       markers.push({
         time: t,
         position: "aboveBar",
-        color: "#f85149",
+        color: colors.down,
         shape: "arrowDown",
-        text: "死叉",
+        text: "",
       });
     }
   }
