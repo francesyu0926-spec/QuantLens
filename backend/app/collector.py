@@ -1,130 +1,91 @@
-"""Market data collector: sliding K-line window + demo/live feeders."""
+"""Market data collector: routes symbols to live data feeds."""
 
 from __future__ import annotations
 
 import asyncio
-import math
-import random
-import time
-from collections import deque
-from dataclasses import dataclass, field
+import logging
 from typing import AsyncIterator
 
-from .config import DEMO_MODE, DEMO_TICK_MS, KLINE_WINDOW
+from .akshare_a import AkshareAShareFeed, fetch_bars, merge_candles, normalize_a_share_code
+from .ccxt_crypto import CcxtCryptoFeed, fetch_crypto_bars
+from .intervals import normalize_interval
+from .models import Candle, SymbolBook
+from .symbols import classify_market
+from .yfinance_us import YfinanceUSFeed, fetch_us_bars
 
-
-@dataclass
-class Candle:
-    time: int
-    open: float
-    high: float
-    low: float
-    close: float
-    volume: float
-
-    def to_dict(self) -> dict:
-        return {
-            "time": self.time,
-            "open": self.open,
-            "high": self.high,
-            "low": self.low,
-            "close": self.close,
-            "volume": self.volume,
-        }
-
-
-@dataclass
-class SymbolBook:
-    symbol: str
-    candles: deque[Candle] = field(default_factory=lambda: deque(maxlen=KLINE_WINDOW))
-    last_price: float = 0.0
-
-    def update_tick(self, price: float, volume: float = 0.0) -> Candle:
-        self.last_price = price
-        now = int(time.time())
-        bucket = now - (now % 60)
-
-        if self.candles and self.candles[-1].time == bucket:
-            c = self.candles[-1]
-            c.high = max(c.high, price)
-            c.low = min(c.low, price)
-            c.close = price
-            c.volume += volume
-            return c
-
-        prev_close = self.candles[-1].close if self.candles else price
-        candle = Candle(
-            time=bucket,
-            open=prev_close,
-            high=max(prev_close, price),
-            low=min(prev_close, price),
-            close=price,
-            volume=volume,
-        )
-        self.candles.append(candle)
-        return candle
-
-
-class DemoFeed:
-    """Synthetic random-walk ticks for offline development."""
-
-    def __init__(self, symbol: str, seed_price: float = 42000.0) -> None:
-        self.symbol = symbol
-        self.price = seed_price
-
-    async def stream(self) -> AsyncIterator[tuple[float, float]]:
-        while True:
-            self.price *= 1 + random.gauss(0, 0.0008)
-            vol = random.uniform(0.1, 3.0)
-            yield self.price, vol
-            await asyncio.sleep(DEMO_TICK_MS / 1000)
-
-
-def seed_prices(symbol: str) -> float:
-    defaults = {
-        "BTC/USDT": 67000.0,
-        "ETH/USDT": 3500.0,
-        "AAPL": 228.0,
-        "600519": 1450.0,
-    }
-    return defaults.get(symbol, 100.0 * (1 + (hash(symbol) % 50) / 100))
-
-
-def bootstrap_history(symbol: str, book: SymbolBook, bars: int = 120) -> None:
-    """Fill history so indicators warm up immediately."""
-    price = seed_prices(symbol)
-    t = int(time.time())
-    start = t - bars * 60
-    for i in range(bars):
-        price *= 1 + math.sin(i / 8) * 0.002 + random.gauss(0, 0.001)
-        bucket = start + i * 60
-        o = price * (1 - random.uniform(0, 0.002))
-        c = price
-        h = max(o, c) * (1 + random.uniform(0, 0.003))
-        l = min(o, c) * (1 - random.uniform(0, 0.003))
-        book.candles.append(
-            Candle(time=bucket, open=o, high=h, low=l, close=c, volume=random.uniform(1, 20))
-        )
-    book.last_price = price
+logger = logging.getLogger(__name__)
 
 
 class MarketCollector:
     def __init__(self) -> None:
         self._books: dict[str, SymbolBook] = {}
+        self._bootstrap_locks: dict[str, asyncio.Lock] = {}
 
-    def book(self, symbol: str) -> SymbolBook:
-        if symbol not in self._books:
-            self._books[symbol] = SymbolBook(symbol=symbol)
-            bootstrap_history(symbol, self._books[symbol])
-        return self._books[symbol]
+    @staticmethod
+    def _key(symbol: str, interval: str) -> str:
+        return f"{symbol}@{normalize_interval(interval)}"
 
-    async def watch(self, symbol: str) -> AsyncIterator[tuple[Candle, float]]:
-        book = self.book(symbol)
-        if DEMO_MODE:
-            feed = DemoFeed(symbol, book.last_price)
+    def book(self, symbol: str, interval: str = "1m") -> SymbolBook:
+        key = self._key(symbol, interval)
+        if key not in self._books:
+            self._books[key] = SymbolBook(symbol=symbol)
+        return self._books[key]
+
+    def _lock(self, key: str) -> asyncio.Lock:
+        if key not in self._bootstrap_locks:
+            self._bootstrap_locks[key] = asyncio.Lock()
+        return self._bootstrap_locks[key]
+
+    async def ensure_history(self, symbol: str, interval: str = "1m") -> SymbolBook:
+        iv = normalize_interval(interval)
+        key = self._key(symbol, iv)
+        book = self.book(symbol, iv)
+        if book.candles:
+            return book
+
+        async with self._lock(key):
+            if book.candles:
+                return book
+            kind = classify_market(symbol)
+
+            def load_sync() -> list[Candle]:
+                if kind == "a_share":
+                    code = normalize_a_share_code(symbol)
+                    bars = fetch_bars(code, iv)
+                    if not bars and iv != "1d":
+                        bars = fetch_bars(code, "1d")
+                    return bars
+                if kind == "crypto":
+                    return fetch_crypto_bars(symbol, iv)
+                if kind == "us_equity":
+                    return fetch_us_bars(symbol, iv)
+                return []
+
+            try:
+                candles = await asyncio.wait_for(
+                    asyncio.to_thread(load_sync), timeout=45.0
+                )
+                merge_candles(book, candles)
+            except Exception as exc:
+                logger.exception("ensure_history failed %s@%s: %s", symbol, iv, exc)
+            return book
+
+    async def watch(
+        self, symbol: str, interval: str = "1m"
+    ) -> AsyncIterator[tuple[Candle, float]]:
+        iv = normalize_interval(interval)
+        book = await self.ensure_history(symbol, iv)
+        kind = classify_market(symbol)
+
+        if kind == "a_share":
+            feed = AkshareAShareFeed(symbol, book, iv)
+        elif kind == "crypto":
+            feed = CcxtCryptoFeed(symbol, book, iv)
+        elif kind == "us_equity":
+            feed = YfinanceUSFeed(symbol, book, iv)
         else:
-            feed = DemoFeed(symbol, book.last_price)  # TODO: ccxt / yfinance / akshare
+            logger.error("Unsupported symbol %s", symbol)
+            raise ValueError(f"Unsupported symbol: {symbol}")
 
-        async for price, vol in feed.stream():
-            candle = book.update_tick(price, vol)
+        async for candle, price in feed.stream():
             yield candle, price

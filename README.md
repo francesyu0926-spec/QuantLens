@@ -19,12 +19,12 @@
 
 | 模块 | 实现 |
 |------|------|
-| 行情采集 | `backend/app/collector.py` — 500 根 K 线滑动窗口；默认 **Demo 随机行情**，可替换为 ccxt WebSocket |
+| 行情采集 | A 股 **AKShare** · 加密货币 **CCXT/Binance** · 美股 **yfinance**，均为 1 分钟线轮询 |
 | 指标引擎 | `backend/app/indicators.py` — EMA、RSI、MACD、布林带、ATR（pandas / pandas-ta） |
 | 策略扫描 | `backend/app/rules.py` — RSI 超卖、布林下轨、EMA 金叉 |
 | 实时分发 | `backend/app/main.py` — `ws://127.0.0.1:8765/ws?symbol=BTC/USDT` |
 | 本地存储 | SQLite `backend/data/quantlens.db` |
-| 前端 | `frontend/` — 自选、主图（lightweight-charts）、指标条、信号日志 |
+| 前端 | 周期切换、主图 EMA/BOLL/成交量、MACD/RSI 副图、十字光标图例、金叉/死叉标记 |
 
 ## 环境要求
 
@@ -77,11 +77,9 @@ npm run tauri dev
 
 ## 接入真实行情
 
-在 `backend/app/config.py` 中设置 `DEMO_MODE = False`，并在 `collector.py` 的 `MarketCollector.watch` 中接入：
-
-- 加密货币：`ccxt` + WebSocket
-- 美股/期货：`yfinance`
-- A 股：`akshare`
+- **A 股**：`600519`、`000001` → AKShare（东方财富 1 分钟线，失败回退新浪）
+- **加密货币**：`BTC/USDT` → CCXT（默认 **KuCoin**；本机若 Binance 返回 451 会自动不可用，可设环境变量 `QUANTLENS_CRYPTO_EXCHANGE=kucoin`）
+- **美股**：`AAPL` → yfinance 1 分钟线（近 5 个交易日）
 
 ## 目录结构
 

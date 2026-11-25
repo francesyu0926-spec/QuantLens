@@ -27,6 +27,7 @@ export interface AlertSignal {
   message: string;
   price: number;
   ts: number;
+  bar_time?: number;
 }
 
 export interface MarketPacket {
@@ -34,6 +35,7 @@ export interface MarketPacket {
   symbol: string;
   price: number;
   candle: Candle;
+  candles?: Candle[];
   indicators: Indicators;
   signals: AlertSignal[];
 }
@@ -41,6 +43,7 @@ export interface MarketPacket {
 export interface WatchlistItem {
   symbol: string;
   name: string;
-  price: number;
-  changePct: number;
+  price: number | null;
+  changePct: number | null;
+  sparkline?: number[];
 }

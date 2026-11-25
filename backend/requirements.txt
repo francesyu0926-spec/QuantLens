@@ -5,6 +5,7 @@ pandas>=2.2.0
 # Optional on Python 3.11; install manually on 3.12+ if desired: pandas-ta
 yfinance>=0.2.48
 akshare>=1.14.0
+ccxt>=4.4.0
 aiosqlite>=0.20.0
 pydantic>=2.9.0
 python-dotenv>=1.0.0

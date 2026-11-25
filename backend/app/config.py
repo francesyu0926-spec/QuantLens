@@ -8,6 +8,7 @@ KLINE_WINDOW = 500
 WS_HOST = "127.0.0.1"
 WS_PORT = 8765
 
-# Demo mode: synthesize ticks when no exchange API key is configured
-DEMO_MODE = True
-DEMO_TICK_MS = 500
+# Live data poll intervals (seconds)
+AKSHARE_POLL_SEC = 5
+CRYPTO_POLL_SEC = 5
+US_POLL_SEC = 15
