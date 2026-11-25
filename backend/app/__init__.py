@@ -1,0 +1,1 @@
+"""QuantLens backend — FastAPI market engine."""
