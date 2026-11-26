@@ -14,6 +14,8 @@ export interface FundamentalsSnapshot {
   listing_date?: string;
   warnings?: string[];
   reason?: string;
+  is_etf?: boolean;
+  source?: string;
 }
 
 export interface CapitalFlowSnapshot {
@@ -40,26 +42,46 @@ export function useFundamentals(symbol: string, enabled = true) {
       return;
     }
     let cancelled = false;
+    const fetchJson = async <T,>(path: string, ms = 12_000): Promise<T> => {
+      const ctrl = new AbortController();
+      const timer = window.setTimeout(() => ctrl.abort(), ms);
+      try {
+        const res = await fetch(path, { signal: ctrl.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return (await res.json()) as T;
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+
     const load = async () => {
       setLoading(true);
+      setFundamentals(null);
       try {
-        const [fRes, cRes] = await Promise.all([
-          fetch(`${API}/fundamentals?symbol=${encodeURIComponent(symbol)}`),
-          fetch(`${API}/capital_flow?symbol=${encodeURIComponent(symbol)}`),
-        ]);
-        const fJson = (await fRes.json()) as FundamentalsSnapshot;
-        const cJson = (await cRes.json()) as CapitalFlowSnapshot;
+        const fJson = await fetchJson<FundamentalsSnapshot>(
+          `${API}/fundamentals?symbol=${encodeURIComponent(symbol)}`
+        );
         if (!cancelled) {
           setFundamentals(fJson);
-          setFlow(cJson);
+          setLoading(false);
         }
+        void fetchJson<CapitalFlowSnapshot>(
+          `${API}/capital_flow?symbol=${encodeURIComponent(symbol)}`,
+          15_000
+        )
+          .then((cJson) => {
+            if (!cancelled) setFlow(cJson);
+          })
+          .catch(() => {
+            if (!cancelled) {
+              setFlow({ ok: false, symbol, reason: "fetch_failed" });
+            }
+          });
       } catch {
         if (!cancelled) {
           setFundamentals({ ok: false, symbol, reason: "fetch_failed" });
-          setFlow({ ok: false, symbol, reason: "fetch_failed" });
+          setLoading(false);
         }
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     };
     void load();

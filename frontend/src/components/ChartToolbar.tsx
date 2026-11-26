@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChartDisplayOptions, TimeInterval } from "../types/chart";
+import type {
+  ChartDisplayOptions,
+  ChartLayoutMode,
+  TimeInterval,
+} from "../types/chart";
 import { INTERVALS } from "../types/chart";
 import type { PriceLineDef } from "../hooks/usePriceLines";
 import { INDICATOR_PLAIN_TIPS } from "../utils/marketPlainLanguage";
@@ -14,6 +18,7 @@ interface Props {
   onAddLine: (price: number, label: string) => void;
   onRemoveLine: (id: string) => void;
   noviceMode?: boolean;
+  chartLayout?: ChartLayoutMode;
 }
 
 function IndicatorToggle({
@@ -74,7 +79,9 @@ export function ChartToolbar({
   onAddLine,
   onRemoveLine,
   noviceMode = false,
+  chartLayout = "single",
 }: Props) {
+  const hideDrawTools = chartLayout !== "single";
   const [drawOpen, setDrawOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -154,6 +161,7 @@ export function ChartToolbar({
       </div>
       </div>
 
+      {!hideDrawTools && (
       <div className="draw-menu" ref={menuRef}>
         <button
           type="button"
@@ -204,6 +212,7 @@ export function ChartToolbar({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

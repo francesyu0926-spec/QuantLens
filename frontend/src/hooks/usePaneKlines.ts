@@ -12,6 +12,7 @@ export function usePaneKlines(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resolvedIv, setResolvedIv] = useState(interval);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!enabled || !symbol) return;
@@ -45,7 +46,9 @@ export function usePaneKlines(
       cancelled = true;
       clearInterval(id);
     };
-  }, [symbol, interval, enabled]);
+  }, [symbol, interval, enabled, reloadKey]);
 
-  return { candles, loading, error, resolvedIv };
+  const retry = () => setReloadKey((k) => k + 1);
+
+  return { candles, loading, error, resolvedIv, retry };
 }

@@ -9,6 +9,7 @@ import {
 import { AlertSettings } from "./components/AlertSettings";
 import { ChartErrorBoundary } from "./components/ChartErrorBoundary";
 import { ChartLoadOverlay } from "./components/ChartLoadOverlay";
+import { SidebarBrandStrip } from "./components/SidebarBrandStrip";
 import { TopStatusBar } from "./components/TopStatusBar";
 import { ChartToolbar } from "./components/ChartToolbar";
 import { ChartPaneGrid } from "./components/ChartPaneGrid";
@@ -43,6 +44,7 @@ import { useNoviceAssist } from "./hooks/useNoviceAssist";
 import { useWatchlistEmaSignals } from "./hooks/useWatchlistEmaSignals";
 import { MarketBriefBanner } from "./components/MarketBriefBanner";
 import { DEFAULT_SYMBOL } from "./config/market";
+import { resolveAShareDisplayName } from "./config/aShareDisplayNames";
 import {
   INDEX_WIND_SYMBOLS,
   PINNED_A_SHARE_SYMBOLS,
@@ -261,18 +263,29 @@ export default function App() {
   const lastReadySymbol = useRef(DEFAULT_SYMBOL);
   const [showBanner, setShowBanner] = useState(false);
 
-  const chartReady = market.candles.length > 0;
+  const marketMatches = market.symbol === symbol;
+  const chartReady = marketMatches && market.candles.length > 0;
+  const prevSymbolCache = chartCache.current.get(
+    cacheKey(lastReadySymbol.current, interval)
+  );
   const sameSymbolCache =
     symbol === lastReadySymbol.current
       ? chartCache.current.get(cacheKey(symbol, interval))
       : undefined;
   const displayCandles = chartReady
     ? market.candles
-    : sameSymbolCache?.candles ?? [];
-  const chartViewSymbol = chartReady ? symbol : symbol;
+    : sameSymbolCache?.candles ?? prevSymbolCache?.candles ?? [];
+  const chartViewSymbol = symbol;
   const switchPending =
-    !chartReady && (market.loading || Boolean(market.loadError));
-
+    !chartReady &&
+    (market.loading ||
+      Boolean(market.loadError) ||
+      !marketMatches);
+  const showStale = switchPending && displayCandles.length > 0;
+  const showLoadOverlay =
+    switchPending &&
+    !showStale &&
+    (market.loading || (Boolean(market.loadError) && !market.loading));
   useEffect(() => {
     if (market.candles.length > 0) {
       chartCache.current.set(cacheKey(symbol, interval), {
@@ -293,8 +306,6 @@ export default function App() {
     const revertTo = lastReadySymbol.current;
     if (symbol !== revertTo) setSymbol(revertTo);
   };
-
-  const showStale = switchPending && displayCandles.length > 0;
 
   const allSignals = useMemo((): AlertSignal[] => {
     const hist = backfillEmaSignals(chartViewSymbol, displayCandles, 12);
@@ -484,8 +495,10 @@ export default function App() {
     const allow = new Set(screenerSymbols);
     return watchlist.filter((item) => allow.has(item.symbol));
   }, [watchlist, screenerSymbols]);
-
-  const activeName =
+  const activeName = useMemo(() => {
+    const wl = watchlistSeed.find((i) => i.symbol === symbol)?.name;
+    return resolveAShareDisplayName(symbol, wl, fundamentals?.name);
+  }, [symbol, watchlistSeed, fundamentals?.name]);
     watchlistSeed.find((i) => i.symbol === symbol)?.name ?? symbol;
 
   useEffect(() => {
@@ -541,7 +554,12 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell" style={shellStyle}>
+    <div
+      className={`app-shell${leftPanelOpen ? "" : " collapsed-left"}${
+        rightPanelOpen ? "" : " collapsed-right"
+      }`}
+      style={shellStyle}
+    >
       <TopStatusBar
         symbol={symbol}
         symbolName={activeName}
@@ -564,6 +582,8 @@ export default function App() {
         fundamentals={fundamentals}
         capitalFlow={capitalFlow}
         fundamentalsLoading={fundamentalsLoading}
+        leftPanelOpen={leftPanelOpen}
+        rightPanelOpen={rightPanelOpen}
       />
 
       {showBanner && market.loadError && (
@@ -593,6 +613,10 @@ export default function App() {
             </button>
           )}
           {leftPanelOpen && (
+            <>
+            <SidebarBrandStrip
+              onCollapsePanel={() => setLeftPanelOpen(false)}
+            />
             <Watchlist
               items={watchlistDisplay}
               poolItems={watchlist}
@@ -605,8 +629,8 @@ export default function App() {
               quotes={quotes}
               screenerActive={screenerSymbols != null}
               onScreenerResult={setScreenerSymbols}
-              onCollapsePanel={() => setLeftPanelOpen(false)}
             />
+            </>
           )}
         </aside>
         <main className="chart-area">
@@ -620,12 +644,16 @@ export default function App() {
             onAddLine={addLine}
             onRemoveLine={removeLine}
             noviceMode={noviceMode}
+            chartLayout={chartLayout}
           />
           {noviceMode && displayCandles.length > 0 && (
             <MarketBriefBanner candles={displayCandles} />
           )}
           {chartLayout === "single" && (
-            <MultiTimeframeRadar symbol={symbol} />
+            <MultiTimeframeRadar
+              symbol={symbol}
+              onPickInterval={applyChartInterval}
+            />
           )}
           <div className="chart-stack">
             {showStale && (
@@ -636,8 +664,7 @@ export default function App() {
               interval={interval}
               loading={market.loading}
               error={market.loadError}
-              visible={switchPending}
-              suppressCenterError={showStale}
+              visible={showLoadOverlay}
               onRetry={market.retry}
               onCancel={cancelSwitch}
             />
@@ -669,6 +696,9 @@ export default function App() {
                   onDualIvChange={setDualPaneIv}
                   quadIvs={quadPaneIvs}
                   onQuadIvChange={onQuadIvChange}
+                  marketBlocked={Boolean(market.loadError) && !chartReady}
+                  marketBlockReason={market.loadError}
+                  onMarketRetry={market.retry}
                 />
                 </div>
               </ChartErrorBoundary>
@@ -711,6 +741,9 @@ export default function App() {
                 if (t != null) {
                   window.setTimeout(() => chartRef.current?.scrollToBar(t), 80);
                 }
+              }}
+              onTradeClick={(t) => {
+                window.setTimeout(() => chartRef.current?.scrollToBar(t), 80);
               }}
             />
           )}

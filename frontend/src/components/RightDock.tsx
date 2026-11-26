@@ -30,6 +30,7 @@ interface Props {
   chartInterval?: TimeInterval;
   supportPrice?: number | null;
   watchlistSymbols?: string[];
+  onTradeClick?: (barTime: number) => void;
 }
 
 export function RightDock({

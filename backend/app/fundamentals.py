@@ -1,10 +1,12 @@
-"""A-share fundamentals and capital flow via AKShare."""
+"""A-share fundamentals and capital flow (East Money + Tencent fallback)."""
 
 from __future__ import annotations
 
 import logging
 import re
 import time
+import urllib.error
+import urllib.request
 from typing import Any
 
 from .akshare_a import is_a_share, is_listed_etf, normalize_a_share_code
@@ -13,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 _CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _TTL_SEC = 90.0
+_HTTP_TIMEOUT = 8.0
 
 
 def _market_for_code(code: str) -> str:
@@ -21,6 +24,12 @@ def _market_for_code(code: str) -> str:
     if code.startswith(("5", "6", "9")):
         return "sh"
     return "sz"
+
+
+def _tencent_prefix(code: str) -> str:
+    if code.startswith(("5", "6", "9")):
+        return f"sh{code}"
+    return f"sz{code}"
 
 
 def _parse_number(raw: Any) -> float | None:
@@ -45,7 +54,43 @@ def _parse_number(raw: Any) -> float | None:
         return None
 
 
-def _info_map(code: str) -> dict[str, str]:
+def _http_get_text(url: str) -> str:
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "https://finance.sina.com.cn",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT) as resp:
+        return resp.read().decode("gbk", "replace")
+
+
+def _fetch_tencent_snapshot(code: str) -> dict[str, Any] | None:
+    """Tencent qt.gtimg.cn — works when East Money TLS fails."""
+    try:
+        raw = _http_get_text(f"http://qt.gtimg.cn/q={_tencent_prefix(code)}")
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        logger.debug("tencent quote %s: %s", code, exc)
+        return None
+    m = re.search(r'"(.*)"', raw)
+    if not m:
+        return None
+    parts = m.group(1).split("~")
+    if len(parts) < 47:
+        return None
+    cap_yi = _parse_number(parts[44])
+    market_cap = cap_yi * 1e8 if cap_yi is not None else None
+    return {
+        "name": parts[1] if len(parts) > 1 else None,
+        "pe_ttm": _parse_number(parts[39]) if len(parts) > 39 else None,
+        "pb": _parse_number(parts[46]) if len(parts) > 46 else None,
+        "market_cap": market_cap,
+        "source": "tencent",
+    }
+
+
+def _info_map_em(code: str) -> dict[str, str]:
     import akshare as ak
 
     df = ak.stock_individual_info_em(symbol=code)
@@ -58,62 +103,80 @@ def _info_map(code: str) -> dict[str, str]:
     return out
 
 
-def _spot_valuation(code: str) -> dict[str, float | None]:
-    """Try EastMoney spot row for PE/PB."""
-    import akshare as ak
-
-    try:
-        df = ak.stock_zh_a_spot_em()
-        row = df[df["代码"].astype(str).str.zfill(6) == code.zfill(6)]
-        if row.empty:
-            return {"pe_ttm": None, "pb": None}
-        r = row.iloc[0]
-        return {
-            "pe_ttm": _parse_number(r.get("市盈率-动态", r.get("市盈率"))),
-            "pb": _parse_number(r.get("市净率")),
-        }
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("spot valuation failed %s: %s", code, exc)
-        return {"pe_ttm": None, "pb": None}
-
-
 def fetch_fundamentals_sync(symbol: str) -> dict[str, Any]:
     code = normalize_a_share_code(symbol)
     if not is_a_share(symbol):
         return {"ok": False, "symbol": code, "reason": "not_a_share"}
-    if is_listed_etf(code):
-        return {"ok": False, "symbol": code, "reason": "etf"}
-
     now = time.time()
+    if is_listed_etf(code):
+        hit = _CACHE.get(f"f:{code}")
+        if hit and now - hit[0] < _TTL_SEC:
+            return hit[1]
+        snap = _fetch_tencent_snapshot(code)
+        if not snap:
+            payload = {
+                "ok": False,
+                "symbol": code,
+                "reason": "unavailable",
+                "is_etf": True,
+            }
+            return payload
+        pe = snap.get("pe_ttm")
+        pb = snap.get("pb")
+        payload = {
+            "ok": True,
+            "symbol": code,
+            "is_etf": True,
+            "name": snap.get("name"),
+            "industry": "ETF",
+            "market_cap": snap.get("market_cap"),
+            "pe_ttm": pe if pe and pe > 0 else None,
+            "pb": pb if pb and pb > 0 else None,
+            "listing_date": None,
+            "warnings": [] if pe else ["etf_metrics_limited"],
+            "source": snap.get("source", "tencent"),
+            "ts": int(now),
+        }
+        _CACHE[f"f:{code}"] = (now, payload)
+        return payload
     hit = _CACHE.get(f"f:{code}")
     if hit and now - hit[0] < _TTL_SEC:
         return hit[1]
 
+    info: dict[str, str] = {}
     try:
-        info = _info_map(code)
-        val = _spot_valuation(code)
-        market_cap = _parse_number(
-            info.get("总市值") or info.get("流通市值")
-        )
-        payload: dict[str, Any] = {
-            "ok": True,
-            "symbol": code,
-            "name": info.get("股票简称") or info.get("证券简称"),
-            "industry": info.get("行业"),
-            "market_cap": market_cap,
-            "pe_ttm": val.get("pe_ttm"),
-            "pb": val.get("pb"),
-            "listing_date": info.get("上市时间"),
-            "warnings": [],
-            "ts": int(now),
-        }
-        if payload["pe_ttm"] is None:
-            payload["pe_ttm"] = _parse_number(info.get("市盈率") or info.get("PE"))
-        _CACHE[f"f:{code}"] = (now, payload)
-        return payload
+        info = _info_map_em(code)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("fundamentals %s: %s", code, exc)
-        return {"ok": False, "symbol": code, "reason": str(exc)}
+        logger.info("em info skipped %s: %s", code, exc)
+
+    snap = _fetch_tencent_snapshot(code)
+    if not snap and not info:
+        payload = {"ok": False, "symbol": code, "reason": "unavailable"}
+        return payload
+
+    market_cap = snap.get("market_cap") if snap else None
+    if market_cap is None and info:
+        market_cap = _parse_number(info.get("总市值") or info.get("流通市值"))
+
+    payload: dict[str, Any] = {
+        "ok": True,
+        "symbol": code,
+        "name": (snap or {}).get("name")
+        or info.get("股票简称")
+        or info.get("证券简称"),
+        "industry": info.get("行业") or info.get("所属行业"),
+        "market_cap": market_cap,
+        "pe_ttm": (snap or {}).get("pe_ttm")
+        or _parse_number(info.get("市盈率") or info.get("PE")),
+        "pb": (snap or {}).get("pb"),
+        "listing_date": info.get("上市时间"),
+        "warnings": [],
+        "source": (snap or {}).get("source", "em"),
+        "ts": int(now),
+    }
+
+    _CACHE[f"f:{code}"] = (now, payload)
+    return payload
 
 
 def fetch_capital_flow_sync(symbol: str) -> dict[str, Any]:
@@ -132,10 +195,14 @@ def fetch_capital_flow_sync(symbol: str) -> dict[str, Any]:
     try:
         df = ak.stock_individual_fund_flow(stock=code, market=market)
     except TypeError:
-        df = ak.stock_fund_flow_individual_hist_em(symbol=code, market=market)
+        try:
+            df = ak.stock_fund_flow_individual_hist_em(symbol=code, market=market)
+        except Exception as exc:  # noqa: BLE001
+            logger.info("capital flow unavailable %s: %s", code, exc)
+            return {"ok": False, "symbol": code, "reason": "unavailable"}
     except Exception as exc:  # noqa: BLE001
-        logger.warning("capital flow %s: %s", code, exc)
-        return {"ok": False, "symbol": code, "reason": str(exc)}
+        logger.info("capital flow unavailable %s: %s", code, exc)
+        return {"ok": False, "symbol": code, "reason": "unavailable"}
 
     if df is None or df.empty:
         return {"ok": False, "symbol": code, "reason": "empty"}

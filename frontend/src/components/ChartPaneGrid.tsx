@@ -23,6 +23,7 @@ import {
   ChartWorkspace,
   type ChartWorkspaceHandle,
 } from "./ChartWorkspace";
+import { ChartPaneState } from "./ChartPaneState";
 
 interface Props {
   layout: ChartLayoutMode;
@@ -45,6 +46,10 @@ interface Props {
   onDualIvChange: (iv: TimeInterval) => void;
   quadIvs: TimeInterval[];
   onQuadIvChange: (idx: number, iv: TimeInterval) => void;
+  /** 主行情切换失败时，子格不再显示无限「加载中」 */
+  marketBlocked?: boolean;
+  marketBlockReason?: string | null;
+  onMarketRetry?: () => void;
 }
 
 export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function ChartPaneGrid({
@@ -68,6 +73,9 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
   onDualIvChange,
   quadIvs,
   onQuadIvChange,
+  marketBlocked = false,
+  marketBlockReason = null,
+  onMarketRetry,
 }, ref) {
   const [ivPickerFor, setIvPickerFor] = useState<number | null>(null);
 
@@ -179,14 +187,34 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
 
         const labelIv =
           idx === 1 && layout === "dual" ? pane1.resolvedIv : iv;
-        const paneLoading = idx === 1 && layout === "dual" && pane1.loading;
-        const paneErr = idx === 1 && layout === "dual" ? pane1.error : null;
         const paneLoaders = [null, pane1, pane2, pane3] as const;
-        const quadLoading =
-          layout === "quad" && idx > 0 && paneLoaders[idx]?.loading;
+        const paneApi = idx > 0 ? paneLoaders[idx] : null;
+        const paneErr = paneApi?.error ?? null;
+        const paneLoading = paneApi?.loading ?? false;
         const showTimeScale = layout === "quad" ? idx >= 2 : true;
 
         const canPickIv = layout === "quad" || (layout === "dual" && idx === 1);
+
+        const hasData = candles.length > 0;
+        const failDetail =
+          marketBlockReason ??
+          paneErr ??
+          (marketBlocked ? "网络超时" : null);
+        const showError =
+          !hasData &&
+          (marketBlocked ||
+            Boolean(paneErr) ||
+            (!paneLoading && !hasData && idx > 0 && paneApi != null));
+        const showLoading =
+          !hasData && !showError && (paneLoading || (idx === 0 && !hasData));
+
+        const onRetryPane = () => {
+          if (marketBlocked && onMarketRetry) {
+            onMarketRetry();
+            return;
+          }
+          paneApi?.retry();
+        };
 
         return (
           <div
@@ -212,7 +240,7 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
                 }
               }}
             >
-              {symbol} · {labelIv}
+              {labelIv}
             </button>
             {ivPickerFor === idx && canPickIv && (
               <div
@@ -233,7 +261,7 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
                 ))}
               </div>
             )}
-            {candles.length > 0 ? (
+            {hasData ? (
               <ChartWorkspace
                 ref={idx === 0 ? primaryRef : undefined}
                 symbol={symbol}
@@ -258,12 +286,22 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
                 patternMarkers={idx === 0 ? patternMarkers : []}
                 autoPriceLines={idx === 0 ? autoPriceLines : []}
               />
+            ) : showError ? (
+              <ChartPaneState
+                mode="error"
+                interval={labelIv}
+                detail={failDetail ?? "网络超时"}
+                onRetry={onRetryPane}
+              />
+            ) : showLoading ? (
+              <ChartPaneState mode="loading" interval={labelIv} />
             ) : (
-              <div className="chart-pane-empty muted">
-                {paneLoading || quadLoading
-                  ? `加载 ${labelIv} …`
-                  : paneErr ?? `暂无 ${labelIv} 数据`}
-              </div>
+              <ChartPaneState
+                mode="error"
+                interval={labelIv}
+                detail={paneErr ?? `暂无 ${labelIv} 数据`}
+                onRetry={paneApi?.retry}
+              />
             )}
           </div>
         );

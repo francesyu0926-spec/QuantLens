@@ -21,16 +21,18 @@ export function MarketSentimentBar({ items }: Props) {
         <span className="market-thermo-val tabular">{ratio}% 看多</span>
       </div>
       <div
-        className="market-thermo-track"
+        className="market-thermo-track market-thermo-track-dual"
         role="progressbar"
         aria-valuenow={ratio}
         aria-valuemin={0}
         aria-valuemax={100}
+        aria-label={`看多 ${ratio}%`}
       >
         <span
-          className="market-thermo-fill"
-          style={{ width: `${ratio}%` }}
+          className="market-thermo-bear"
+          style={{ width: `${100 - ratio}%` }}
         />
+        <span className="market-thermo-bull" style={{ width: `${ratio}%` }} />
       </div>
       <p className="market-thermo-hint muted">
         涨 {up} · 跌 {withChg.length - up}（有报价自选）

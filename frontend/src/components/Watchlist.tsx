@@ -70,12 +70,23 @@ function Row({
         onClick={() => onSelect(item.symbol)}
       >
         <div className="watch-ident">
-          <span className="sym" title={item.symbol}>
-            {item.symbol || "—"}
+          <span className="name" title={item.name || item.symbol}>
+            {item.name?.trim() || item.symbol || "—"}
           </span>
-          <span className="name" title={item.name}>
-            {item.name || "—"}
-          </span>
+          {hasQuote && item.changePct != null ? (
+            <span
+              className={
+                item.changePct >= 0 ? "chg up" : "chg down"
+              }
+            >
+              {item.changePct >= 0 ? "+" : ""}
+              {item.changePct.toFixed(2)}%
+            </span>
+          ) : (
+            <span className="sym muted" title={item.symbol}>
+              {item.symbol || "—"}
+            </span>
+          )}
         </div>
         {hasQuote ? (
           <Sparkline values={item.sparkline} colors={priceColors} />
@@ -84,22 +95,7 @@ function Row({
         )}
         <div className="watch-quote">
           {hasQuote ? (
-            <>
-              <span className="px">{item.price!.toFixed(2)}</span>
-              <span
-                className={
-                  item.changePct == null
-                    ? "chg"
-                    : item.changePct >= 0
-                      ? "chg up"
-                      : "chg down"
-                }
-              >
-                {item.changePct == null
-                  ? ""
-                  : `${item.changePct >= 0 ? "+" : ""}${item.changePct.toFixed(2)}%`}
-              </span>
-            </>
+            <span className="px">{item.price!.toFixed(2)}</span>
           ) : (
             <span className="watch-faint-dash">-</span>
           )}

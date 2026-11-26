@@ -75,6 +75,35 @@ interface LegendState {
   ema50?: number;
 }
 
+function legendFromBar(
+  list: Candle[],
+  idx: number,
+  ema20: number[],
+  ema50: number[]
+): LegendState {
+  const candle = list[idx];
+  if (!candle) return { visible: false };
+  const prevClose = idx > 0 ? list[idx - 1].close : candle.open;
+  const changePct =
+    prevClose > 0 ? ((candle.close - prevClose) / prevClose) * 100 : 0;
+  return {
+    visible: true,
+    time: candle.time,
+    open: candle.open,
+    high: candle.high,
+    low: candle.low,
+    close: candle.close,
+    changePct,
+    ema20: idx >= 0 ? ema20[idx] : undefined,
+    ema50: idx >= 0 ? ema50[idx] : undefined,
+  };
+}
+
+function formatLegNum(n: number | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return n.toFixed(2);
+}
+
 function hexAlpha(hex: string, alpha: number): string {
   const n = hex.replace("#", "");
   const r = parseInt(n.slice(0, 2), 16);
@@ -166,6 +195,16 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
   candlesRef.current = candles;
   ema20Ref.current = ema20;
   ema50Ref.current = ema50;
+
+  useEffect(() => {
+    if (candles.length === 0) {
+      setLegend({ visible: false });
+      return;
+    }
+    if (!legendHover) {
+      setLegend(legendFromBar(candles, candles.length - 1, ema20, ema50));
+    }
+  }, [candles, ema20, ema50, legendHover]);
   const boll = useMemo(() => computeBollinger(closes), [closes]);
   const macd = useMemo(() => computeMacd(closes), [closes]);
   macdHistRef.current = macd.hist;
@@ -409,6 +448,17 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
     }) => {
       if (!param.time || !param.seriesData.size) {
         setLegendHover(false);
+        const list = candlesRef.current;
+        if (list.length > 0) {
+          setLegend(
+            legendFromBar(
+              list,
+              list.length - 1,
+              ema20Ref.current,
+              ema50Ref.current
+            )
+          );
+        }
         sub.clearCrosshairPosition();
         return;
       }
@@ -416,20 +466,10 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
       if (!candle) return;
       const list = candlesRef.current;
       const idx = list.findIndex((c) => c.time === param.time);
-      const prevClose = idx > 0 ? list[idx - 1].close : candle.open;
-      const changePct = ((candle.close - prevClose) / prevClose) * 100;
       setLegendHover(true);
-      setLegend({
-        visible: true,
-        time: param.time as number,
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close,
-        changePct,
-        ema20: idx >= 0 ? ema20Ref.current[idx] : undefined,
-        ema50: idx >= 0 ? ema50Ref.current[idx] : undefined,
-      });
+      setLegend(
+        legendFromBar(list, idx >= 0 ? idx : list.length - 1, ema20Ref.current, ema50Ref.current)
+      );
 
       if (idx >= 0 && macdHist.current && param.time) {
         const y = macdHistRef.current[idx] ?? 0;
@@ -448,6 +488,17 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
         if (!param.time) {
           main.clearCrosshairPosition();
           setLegendHover(false);
+          const list = candlesRef.current;
+          if (list.length > 0) {
+            setLegend(
+              legendFromBar(
+                list,
+                list.length - 1,
+                ema20Ref.current,
+                ema50Ref.current
+              )
+            );
+          }
           return;
         }
         const candle = candlesRef.current.find((c) => c.time === param.time);
@@ -737,8 +788,7 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
     priceLineHandles.current = built;
   }, [priceLines, positionCostLine, autoPriceLines, chartReady, symbol]);
 
-  const leg =
-    legendHover && legend.visible && legend.close != null ? legend : null;
+  const leg = legend.visible && legend.close != null ? legend : null;
 
   return (
     <div
@@ -749,43 +799,78 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
       onMouseLeave={() => {
         setLegendHover(false);
         mainChart.current?.clearCrosshairPosition();
+        const list = candlesRef.current;
+        if (list.length > 0) {
+          setLegend(
+            legendFromBar(
+              list,
+              list.length - 1,
+              ema20Ref.current,
+              ema50Ref.current
+            )
+          );
+        }
       }}
     >
       {leg && (
-        <div className="chart-legend chart-legend-hover">
-          <div className="legend-ohlc">
-            <span className="leg-o">
-              <em>O</em> {leg.open?.toFixed(2)}
+        <div
+          className={`chart-legend chart-legend-compact${
+            legendHover ? " is-crosshair" : ""
+          }`}
+          aria-live="polite"
+        >
+          <div className="legend-ohlc tabular">
+            <span className="leg-field">
+              <span className="leg-k">O</span>
+              <span className="leg-v leg-neutral">{formatLegNum(leg.open)}</span>
             </span>
-            <span className="leg-h">
-              <em>H</em> {leg.high?.toFixed(2)}
+            <span className="leg-field">
+              <span className="leg-k">H</span>
+              <span className="leg-v leg-high">{formatLegNum(leg.high)}</span>
             </span>
-            <span className="leg-l">
-              <em>L</em> {leg.low?.toFixed(2)}
+            <span className="leg-field">
+              <span className="leg-k">L</span>
+              <span className="leg-v leg-low">{formatLegNum(leg.low)}</span>
             </span>
-            <span className="leg-c">
-              <em>C</em> {leg.close!.toFixed(2)}
-            </span>
-            <span
-              className={`leg-chg ${
-                (leg.changePct ?? 0) >= 0 ? "leg-up" : "leg-down"
-              }`}
-            >
-              {(leg.changePct ?? 0) >= 0 ? "+" : ""}
-              {(leg.changePct ?? 0).toFixed(2)}%
+            <span className="leg-field leg-field-close">
+              <span className="leg-k">C</span>
+              <span
+                className={`leg-v leg-close ${
+                  leg.close != null && leg.open != null && leg.close >= leg.open
+                    ? "leg-up"
+                    : "leg-down"
+                }`}
+              >
+                {formatLegNum(leg.close)}
+              </span>
+              <span
+                className={`leg-pct ${
+                  (leg.changePct ?? 0) >= 0 ? "leg-up" : "leg-down"
+                }`}
+              >
+                ({(leg.changePct ?? 0) >= 0 ? "+" : ""}
+                {(leg.changePct ?? 0).toFixed(2)}%)
+              </span>
             </span>
           </div>
           {options.showEma && (
-            <div className="legend-ema">
-              <span className="leg-ema20">
-                <i className="swatch swatch-ema20" />
-                EMA20 {leg.ema20?.toFixed(2) ?? "—"}
+            <>
+              <span className="legend-vrule" aria-hidden />
+              <span className="legend-ema tabular">
+                <span className="leg-field">
+                  <span className="leg-dot leg-dot-ema20" aria-hidden />
+                  <span className="leg-v leg-neutral">
+                    {formatLegNum(leg.ema20)}
+                  </span>
+                </span>
+                <span className="leg-field">
+                  <span className="leg-dot leg-dot-ema50" aria-hidden />
+                  <span className="leg-v leg-neutral">
+                    {formatLegNum(leg.ema50)}
+                  </span>
+                </span>
               </span>
-              <span className="leg-ema50">
-                <i className="swatch swatch-ema50" />
-                EMA50 {leg.ema50?.toFixed(2) ?? "—"}
-              </span>
-            </div>
+            </>
           )}
         </div>
       )}
