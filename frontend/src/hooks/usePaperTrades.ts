@@ -23,6 +23,9 @@ function loadAll(): Record<string, PaperTrade[]> {
 
 function saveAll(data: Record<string, PaperTrade[]>) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  void import("../utils/userDataSync").then(({ syncUserDataKey }) =>
+    syncUserDataKey(STORAGE_KEY, data)
+  );
 }
 
 export function usePaperTrades(symbol: string) {

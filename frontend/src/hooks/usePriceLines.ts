@@ -24,7 +24,12 @@ export function usePriceLines(symbol: string) {
   const persist = useCallback(
     (next: PriceLineDef[]) => {
       setLines(next);
-      localStorage.setItem(keyFor(symbol), JSON.stringify(next.slice(0, 12)));
+      const clipped = next.slice(0, 12);
+      const storageKey = keyFor(symbol);
+      localStorage.setItem(storageKey, JSON.stringify(clipped));
+      void import("../utils/userDataSync").then(({ syncUserDataKey }) =>
+        syncUserDataKey(storageKey, clipped)
+      );
     },
     [symbol]
   );

@@ -31,6 +31,9 @@ export function usePriceColorScheme(symbol: string) {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, mode);
+    void import("../utils/userDataSync").then(({ syncUserDataKey }) =>
+      syncUserDataKey(STORAGE_KEY, mode)
+    );
   }, [mode]);
 
   return { mode, setMode, colors };

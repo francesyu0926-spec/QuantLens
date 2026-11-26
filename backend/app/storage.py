@@ -7,6 +7,8 @@ from .config import DATA_DIR, DB_PATH
 
 
 async def init_db() -> None:
+    from .user_data import ensure_user_data_schema
+
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -32,6 +34,7 @@ async def init_db() -> None:
             """
         )
         await db.commit()
+    await ensure_user_data_schema()
 
 
 async def save_kline_cache(symbol: str, timeframe: str, rows: list[dict[str, Any]]) -> None:

@@ -17,7 +17,11 @@ export function useNoviceAssist() {
     setEnabled((on) => {
       const next = !on;
       try {
-        localStorage.setItem(KEY, next ? "1" : "0");
+        const v = next ? "1" : "0";
+        localStorage.setItem(KEY, v);
+        void import("../utils/userDataSync").then(({ syncUserDataKey }) =>
+          syncUserDataKey(KEY, v)
+        );
       } catch {
         /* ignore */
       }
@@ -28,7 +32,11 @@ export function useNoviceAssist() {
   const setOn = useCallback((on: boolean) => {
     setEnabled(on);
     try {
-      localStorage.setItem(KEY, on ? "1" : "0");
+      const v = on ? "1" : "0";
+      localStorage.setItem(KEY, v);
+      void import("../utils/userDataSync").then(({ syncUserDataKey }) =>
+        syncUserDataKey(KEY, v)
+      );
     } catch {
       /* ignore */
     }

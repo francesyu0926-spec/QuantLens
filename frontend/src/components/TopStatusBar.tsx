@@ -6,6 +6,9 @@ import { LayoutSwitchMenu } from "./LayoutSwitchMenu";
 import type { Candle } from "../types/market";
 import { isAShareSessionOpen } from "../utils/marketSession";
 import type { QuoteMap } from "../hooks/useWatchlistQuotes";
+import type { CapitalFlowSnapshot, FundamentalsSnapshot } from "../hooks/useFundamentals";
+import { FundamentalBadges } from "./FundamentalBadges";
+import { isTauri, toggleMiniTicker } from "../utils/nativeBridge";
 
 function exchangeSuffix(code: string): string {
   if (!/^\d{6}$/.test(code)) return code;
@@ -32,6 +35,9 @@ interface Props {
   onChartLayout: (mode: ChartLayoutMode) => void;
   noviceMode: boolean;
   onToggleNovice: () => void;
+  fundamentals?: FundamentalsSnapshot | null;
+  capitalFlow?: CapitalFlowSnapshot | null;
+  fundamentalsLoading?: boolean;
 }
 
 export function TopStatusBar({
@@ -53,6 +59,9 @@ export function TopStatusBar({
   onChartLayout,
   noviceMode,
   onToggleNovice,
+  fundamentals = null,
+  capitalFlow = null,
+  fundamentalsLoading = false,
 }: Props) {
   const [sessionOpen, setSessionOpen] = useState(() => isAShareSessionOpen());
 
@@ -130,6 +139,12 @@ export function TopStatusBar({
           <span className="top-session-dot" aria-hidden />
           {marketHint}
         </span>
+        <FundamentalBadges
+          symbol={symbol}
+          fundamentals={fundamentals}
+          flow={capitalFlow}
+          loading={fundamentalsLoading}
+        />
       </div>
 
       <div className="top-spacer" aria-hidden />
@@ -152,6 +167,16 @@ export function TopStatusBar({
           </span>
           AI 诊断
         </button>
+        {isTauri() && (
+          <button
+            type="button"
+            className="top-btn"
+            title="置顶迷你看盘"
+            onClick={() => void toggleMiniTicker(true)}
+          >
+            迷你窗
+          </button>
+        )}
         <button
           type="button"
           className="top-btn top-btn-icon"

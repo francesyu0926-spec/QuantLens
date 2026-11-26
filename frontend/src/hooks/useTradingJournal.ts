@@ -23,7 +23,11 @@ function load(): JournalEntry[] {
 }
 
 function save(rows: JournalEntry[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(rows.slice(0, 200)));
+  const clipped = rows.slice(0, 200);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(clipped));
+  void import("../utils/userDataSync").then(({ syncUserDataKey }) =>
+    syncUserDataKey(STORAGE_KEY, clipped)
+  );
 }
 
 export function useTradingJournal() {

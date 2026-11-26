@@ -48,6 +48,10 @@ import {
   PINNED_A_SHARE_SYMBOLS,
 } from "./config/pinnedWatchlist";
 import { backfillEmaSignals } from "./utils/signalHistory";
+import { MiniTicker } from "./components/MiniTicker";
+import { useFundamentals } from "./hooks/useFundamentals";
+import { bootstrapUserDataSync } from "./utils/userDataSync";
+import { isTauri, nativeNotify } from "./utils/nativeBridge";
 import {
   findKeyLevels,
   keyLevelDistances,
@@ -86,8 +90,21 @@ function playBeep() {
   }
 }
 
+const MINI_MODE =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("mode") === "mini";
+
 export default function App() {
-  const [symbol, setSymbol] = useState(DEFAULT_SYMBOL);
+  const [symbol, setSymbol] = useState(() => {
+    if (MINI_MODE) {
+      try {
+        return localStorage.getItem("quantlens.lastSymbol") || DEFAULT_SYMBOL;
+      } catch {
+        return DEFAULT_SYMBOL;
+      }
+    }
+    return DEFAULT_SYMBOL;
+  });
   const [interval, setInterval] = useState<TimeInterval>("1m");
   const [chartOptions, setChartOptions] =
     useState<ChartDisplayOptions>(DEFAULT_CHART_OPTIONS);
@@ -209,7 +226,34 @@ export default function App() {
   }, [visibleWatchSymbols, symbolList, symbol]);
 
   const quotes = useWatchlistQuotes(quoteSymbols, symbol, market.price);
+  const { fundamentals, flow: capitalFlow, loading: fundamentalsLoading } =
+    useFundamentals(symbol, !MINI_MODE);
   const prevLiveCount = useRef(0);
+
+  useEffect(() => {
+    void bootstrapUserDataSync();
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("quantlens.lastSymbol", symbol);
+    } catch {
+      /* ignore */
+    }
+  }, [symbol]);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let unlisten: (() => void) | undefined;
+    void import("@tauri-apps/api/event").then(({ listen }) => {
+      void listen<string>("navigate-symbol", (e) => {
+        if (e.payload) setSymbol(e.payload);
+      }).then((fn) => {
+        unlisten = fn;
+      });
+    });
+    return () => unlisten?.();
+  }, []);
   const chartRef = useRef<ChartWorkspaceHandle>(null);
   const chartCache = useRef(
     new Map<string, { candles: Candle[]; price: number }>()
@@ -332,15 +376,23 @@ export default function App() {
   }, [market.signals.length, rules.soundEnabled]);
 
   useEffect(() => {
-    if (!rules.webhookEnabled || !rules.webhookUrl.trim()) return;
     for (const s of market.signals) {
       if (pushedSignals.current.has(s.id)) continue;
       pushedSignals.current.add(s.id);
-      void relayWebhook(
-        rules.webhookUrl.trim(),
-        `${s.symbol} ${s.rule}`,
-        `${s.message} @${s.price.toFixed(4)}`
-      );
+      if (rules.webhookEnabled && rules.webhookUrl.trim()) {
+        void relayWebhook(
+          rules.webhookUrl.trim(),
+          `${s.symbol} ${s.rule}`,
+          `${s.message} @${s.price.toFixed(4)}`
+        );
+      }
+      if (rules.soundEnabled) {
+        void nativeNotify(
+          `${s.symbol} ${s.rule}`,
+          `${s.message} @${s.price.toFixed(2)}`,
+          s.symbol
+        );
+      }
     }
   }, [market.signals, rules.webhookEnabled, rules.webhookUrl]);
 
@@ -474,6 +526,20 @@ export default function App() {
     "--color-price-down": priceColors.down,
   } as CSSProperties;
 
+  const changePct = quotes[symbol]?.changePct ?? null;
+
+  if (MINI_MODE) {
+    return (
+      <MiniTicker
+        symbol={symbol}
+        symbolName={activeName}
+        price={effectivePrice}
+        changePct={changePct}
+        candles={displayCandles}
+      />
+    );
+  }
+
   return (
     <div className="app-shell" style={shellStyle}>
       <TopStatusBar
@@ -495,6 +561,9 @@ export default function App() {
         onChartLayout={setChartLayout}
         noviceMode={noviceMode}
         onToggleNovice={toggleNovice}
+        fundamentals={fundamentals}
+        capitalFlow={capitalFlow}
+        fundamentalsLoading={fundamentalsLoading}
       />
 
       {showBanner && market.loadError && (
@@ -635,6 +704,7 @@ export default function App() {
               onPaperBuy={(qty) => paperBuy(effectivePrice, qty)}
               onPaperSell={(qty) => paperSell(effectivePrice, qty)}
               chartInterval={interval}
+              watchlistSymbols={symbolList}
               onPickSignal={(sig) => {
                 if (sig.symbol !== symbol) setSymbol(sig.symbol);
                 const t = sig.bar_time;

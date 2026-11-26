@@ -5,13 +5,9 @@ import { TradingJournalPanel } from "./TradingJournalPanel";
 import type { AlertSignal, Candle } from "../types/market";
 import type { TimeInterval } from "../types/chart";
 import { A_SHARE_ONLY } from "../config/market";
-import {
-  backtestEmaCross,
-  formatProfitLossRatio,
-  type BacktestStats,
-} from "../utils/backtest";
 import { SignalLog, type SignalScope } from "./SignalLog";
 import { MarketHealthCard } from "./MarketHealthCard";
+import { BacktestPanel } from "./BacktestPanel";
 
 const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8765";
 
@@ -33,6 +29,7 @@ interface Props {
   onPaperSell?: (qty: number) => void;
   chartInterval?: TimeInterval;
   supportPrice?: number | null;
+  watchlistSymbols?: string[];
 }
 
 export function RightDock({
@@ -51,6 +48,7 @@ export function RightDock({
   onPaperSell,
   chartInterval = "1m",
   supportPrice = null,
+  watchlistSymbols = [],
 }: Props) {
   const [tab, setTab] = useState<Tab>("signals");
   const [paperQty, setPaperQty] = useState("100");
@@ -61,11 +59,6 @@ export function RightDock({
     bids: { price: number; amount: number }[];
     asks: { price: number; amount: number }[];
   } | null>(null);
-
-  const stats = useMemo((): BacktestStats | null => {
-    if (tab !== "backtest") return null;
-    return backtestEmaCross(candles);
-  }, [candles, tab]);
 
   const applyQtyPct = (pct: number) => {
     const e = Number(entry) || price;
@@ -344,99 +337,12 @@ export function RightDock({
       )}
 
       {tab === "backtest" && (
-        <section className="dock-panel backtest-panel">
-          <header className="backtest-head">
-            <h2 className="backtest-title">EMA 金叉回测</h2>
-            <span className="backtest-meta muted">
-              基于当前 {candles.length} 根 K 线
-            </span>
-            <button
-              type="button"
-              className="backtest-help"
-              title="金叉做多、死叉平仓；胜率/盈亏比仅统计已平仓回合，累计收益含持仓市值"
-              aria-label="回测规则说明"
-            >
-              ?
-            </button>
-          </header>
-          {!stats && <p className="muted">需要至少 60 根 K 线</p>}
-          {stats && (
-            <>
-              <div className="backtest-hero">
-                <span className="backtest-hero-label">累计收益率</span>
-                <span
-                  className={`backtest-hero-value tabular pnl-${
-                    stats.totalReturnPct >= 0 ? "up" : "down"
-                  }`}
-                >
-                  {stats.totalReturnPct >= 0 ? "+" : ""}
-                  {stats.totalReturnPct.toFixed(2)}%
-                </span>
-                {stats.openPosition && (
-                  <p className="backtest-hero-sub">
-                    当前持仓浮盈{" "}
-                    <span
-                      className={`tabular pnl-${
-                        stats.openPosition.floatingPnlPct >= 0 ? "up" : "down"
-                      }`}
-                    >
-                      {stats.openPosition.floatingPnlPct >= 0 ? "+" : ""}
-                      {stats.openPosition.floatingPnlPct.toFixed(2)}%
-                    </span>
-                  </p>
-                )}
-              </div>
-              <div className="stat-grid stat-grid-aux">
-                <div className="stat-card">
-                  <span className="stat-label">成交次数</span>
-                  <span className="stat-value stat-neutral">
-                    {stats.trades}
-                  </span>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-label">胜率</span>
-                  <span className="stat-value stat-neutral">
-                    {stats.winRate == null ? "—" : `${stats.winRate.toFixed(1)}%`}
-                  </span>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-label">盈亏比</span>
-                  <span className="stat-value stat-neutral">
-                    {formatProfitLossRatio(stats.profitLossRatio)}
-                  </span>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-label">最大回撤</span>
-                  <span className="stat-value pnl-down tabular">
-                    {stats.maxDrawdown.toFixed(2)}%
-                  </span>
-                </div>
-              </div>
-              {stats.openPosition && (
-                <div className="backtest-open-card">
-                  <div className="backtest-open-row">
-                    <span className="backtest-open-title">当前持仓中</span>
-                    <span className="backtest-open-badge">未平仓</span>
-                  </div>
-                  <div className="backtest-open-row">
-                    <span className="backtest-open-entry tabular">
-                      开仓 {stats.openPosition.entryPrice.toFixed(2)}
-                    </span>
-                    <span
-                      className={`backtest-open-pnl tabular pnl-${
-                        stats.openPosition.floatingPnlPct >= 0 ? "up" : "down"
-                      }`}
-                    >
-                      浮盈{" "}
-                      {stats.openPosition.floatingPnlPct >= 0 ? "+" : ""}
-                      {stats.openPosition.floatingPnlPct.toFixed(2)}%
-                    </span>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </section>
+        <BacktestPanel
+          symbol={symbol}
+          candles={candles}
+          watchlistSymbols={watchlistSymbols}
+          chartInterval={chartInterval}
+        />
       )}
 
       {tab === "depth" && (

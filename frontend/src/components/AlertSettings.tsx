@@ -1,11 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AlertRules } from "../hooks/useAlertRules";
 import {
   PRICE_COLOR_MODE_LABEL,
   type PriceColorMode,
 } from "../utils/priceColors";
+import {
+  downloadUserDataBackup,
+  restoreUserDataFromFile,
+} from "../utils/userDataBackup";
 
 const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8765";
+
+function downloadCsv(path: string, filename: string) {
+  const a = document.createElement("a");
+  a.href = `${API}${path}`;
+  a.download = filename;
+  a.rel = "noopener";
+  a.click();
+}
 
 const PRICE_MODE_SHORT: Record<PriceColorMode, string> = {
   auto: "自动",
@@ -20,6 +32,7 @@ interface Props {
   onClose: () => void;
   priceColorMode: PriceColorMode;
   onPriceColorMode: (m: PriceColorMode) => void;
+  onDataRestored?: () => void;
 }
 
 function M3Switch({
@@ -71,8 +84,11 @@ export function AlertSettings({
   onClose,
   priceColorMode,
   onPriceColorMode,
+  onDataRestored,
 }: Props) {
   const [testState, setTestState] = useState<"idle" | "ok" | "fail">("idle");
+  const [backupMsg, setBackupMsg] = useState<string | null>(null);
+  const importRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -173,6 +189,78 @@ export function AlertSettings({
               onChange={(v) => onChange({ ...rules, bbUpper: v })}
             />
           </div>
+        </div>
+
+        <div className="settings-card">
+          <h4 className="settings-card-title">数据备份</h4>
+          <p className="settings-card-hint muted">
+            导出/恢复自选、模拟持仓、复盘笔记、画线与预警配置（JSON）
+          </p>
+          <div className="settings-backup-actions">
+            <button
+              type="button"
+              className="chip"
+              onClick={() => {
+                downloadUserDataBackup();
+                setBackupMsg("已下载备份文件");
+                window.setTimeout(() => setBackupMsg(null), 2500);
+              }}
+            >
+              导出全部数据
+            </button>
+            <button
+              type="button"
+              className="chip"
+              onClick={() => importRef.current?.click()}
+            >
+              从备份恢复
+            </button>
+            <input
+              ref={importRef}
+              type="file"
+              accept="application/json,.json"
+              className="settings-backup-file"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                void restoreUserDataFromFile(file).then((res) => {
+                  if (res.ok) {
+                    setBackupMsg("恢复成功，正在刷新…");
+                    onDataRestored?.();
+                    window.setTimeout(() => window.location.reload(), 400);
+                  } else {
+                    setBackupMsg(res.message);
+                    window.setTimeout(() => setBackupMsg(null), 3500);
+                  }
+                });
+              }}
+            />
+          </div>
+          {backupMsg && (
+            <p className="settings-card-hint muted">{backupMsg}</p>
+          )}
+          <div className="settings-backup-actions">
+            <button
+              type="button"
+              className="chip"
+              onClick={() => downloadCsv("/export/trades.csv", "quantlens-trades.csv")}
+            >
+              导出模拟成交 CSV
+            </button>
+            <button
+              type="button"
+              className="chip"
+              onClick={() =>
+                downloadCsv("/export/journal.csv", "quantlens-journal.csv")
+              }
+            >
+              导出复盘笔记 CSV
+            </button>
+          </div>
+          <p className="settings-card-hint muted">
+            SQLite 已同步的数据可在其他设备通过「从备份恢复」或自动拉取对齐
+          </p>
         </div>
 
         <div className="settings-card">

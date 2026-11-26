@@ -19,7 +19,11 @@ function loadExtra(): SeedItem[] {
 
 function saveExtra(items: SeedItem[]) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, 80)));
+    const clipped = items.slice(0, 80);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(clipped));
+    void import("../utils/userDataSync").then(({ syncUserDataKey }) =>
+      syncUserDataKey(STORAGE_KEY, clipped)
+    );
   } catch {
     /* quota */
   }

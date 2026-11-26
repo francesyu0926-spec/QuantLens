@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from .catalog import search_symbols
@@ -25,7 +26,18 @@ from .config import WS_HOST, WS_PORT
 from .intervals import normalize_interval
 from .indicators import compute_indicators
 from .rules import scan_signals
+from .fundamentals import fetch_capital_flow_sync, fetch_fundamentals_sync
 from .storage import init_db, save_kline_cache
+from .user_data import (
+    DRAWING_PREFIX,
+    SYNC_KEYS,
+    export_journal_csv,
+    export_trades_csv,
+    user_data_bulk_set,
+    user_data_get,
+    user_data_list,
+    user_data_set,
+)
 
 collector = MarketCollector()
 
@@ -102,6 +114,87 @@ async def depth(
     import asyncio
 
     return await asyncio.to_thread(fetch_depth_sync, symbol, levels=levels)
+
+
+@app.get("/fundamentals")
+async def fundamentals(symbol: str = Query(...)) -> dict[str, Any]:
+    import asyncio
+
+    return await asyncio.to_thread(fetch_fundamentals_sync, symbol)
+
+
+@app.get("/capital_flow")
+async def capital_flow(symbol: str = Query(...)) -> dict[str, Any]:
+    import asyncio
+
+    return await asyncio.to_thread(fetch_capital_flow_sync, symbol)
+
+
+class UserDataPut(BaseModel):
+    payload: Any
+
+
+class UserDataBulk(BaseModel):
+    entries: dict[str, Any] = Field(default_factory=dict)
+
+
+@app.get("/sync")
+async def sync_get(all_keys: bool = Query(False)) -> dict[str, Any]:
+    if all_keys:
+        return await user_data_list(None)
+    data = await user_data_list(None)
+    entries = {
+        k: v
+        for k, v in data["entries"].items()
+        if k in SYNC_KEYS or k.startswith(DRAWING_PREFIX)
+    }
+    meta = {k: data["updated_at"][k] for k in entries if k in data["updated_at"]}
+    return {"entries": entries, "updated_at": meta}
+
+
+@app.put("/sync/{key:path}")
+async def sync_put_key(key: str, body: UserDataPut) -> dict[str, Any]:
+    if key not in SYNC_KEYS and not key.startswith(DRAWING_PREFIX):
+        return {"ok": False, "error": "key not allowed"}
+    ts = await user_data_set(key, body.payload)
+    return {"ok": True, "key": key, "updated_at": ts}
+
+
+@app.post("/sync/bulk")
+async def sync_bulk(body: UserDataBulk) -> dict[str, Any]:
+    filtered = {
+        k: v
+        for k, v in body.entries.items()
+        if k in SYNC_KEYS or k.startswith(DRAWING_PREFIX)
+    }
+    ts_map = await user_data_bulk_set(filtered)
+    return {"ok": True, "updated_at": ts_map}
+
+
+@app.get("/sync/item/{key:path}")
+async def sync_get_key(key: str) -> dict[str, Any]:
+    row = await user_data_get(key)
+    if row is None:
+        return {"ok": False, "key": key}
+    return {"ok": True, **row}
+
+
+@app.get("/export/trades.csv")
+async def export_trades() -> PlainTextResponse:
+    data = await user_data_list(None)
+    text = export_trades_csv(data["entries"])
+    return PlainTextResponse(
+        text, media_type="text/csv; charset=utf-8"
+    )
+
+
+@app.get("/export/journal.csv")
+async def export_journal() -> PlainTextResponse:
+    data = await user_data_list(None)
+    text = export_journal_csv(data["entries"])
+    return PlainTextResponse(
+        text, media_type="text/csv; charset=utf-8"
+    )
 
 
 @app.get("/diagnose")

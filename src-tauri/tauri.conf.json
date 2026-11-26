@@ -12,10 +12,24 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "QuantLens",
         "width": 1400,
         "height": 900,
         "resizable": true
+      },
+      {
+        "label": "mini-ticker",
+        "title": "QuantLens Ticker",
+        "url": "index.html?mode=mini",
+        "width": 340,
+        "height": 88,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "skipTaskbar": true
       }
     ],
     "security": {

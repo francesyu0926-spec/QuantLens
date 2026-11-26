@@ -37,6 +37,9 @@ export function useAlertRules() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(rules));
+    void import("../utils/userDataSync").then(({ syncUserDataKey }) =>
+      syncUserDataKey(STORAGE_KEY, rules)
+    );
   }, [rules]);
 
   return { rules, setRules };
