@@ -315,10 +315,10 @@ body,
   display: none;
 }
 
-/* L1：侧栏/双栏展开等中等挤压 — 主力流、会话文案、次要按钮 */
-.top-bar--with-side .top-session-text,
-.top-bar--squeeze .top-session-text,
-.top-bar--compact .top-session-text {
+/* L1：侧栏/双栏展开等中等挤压 — 主力流、交易时段文案、次要按钮 */
+.top-bar--with-side .top-tag-session-plain,
+.top-bar--squeeze .top-tag-session-plain,
+.top-bar--compact .top-tag-session-plain {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -328,14 +328,6 @@ body,
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-.top-bar--with-side .top-tag-session-plain,
-.top-bar--squeeze .top-tag-session-plain,
-.top-bar--compact .top-tag-session-plain {
-  padding: 0 2px;
-  min-width: 12px;
-  gap: 4px;
 }
 
 .top-bar--squeeze .top-main-flow-wide {
@@ -741,6 +733,16 @@ body,
   animation: conn-breathe-green 2s ease-in-out infinite;
 }
 
+/* 收盘后链路仍在线：柔和绿点，区别于盘中与离线灰点 */
+.conn-capsule--sidebar-dot.conn-capsule--closed.conn-capsule--link-up .conn-dot {
+  width: 7px;
+  height: 7px;
+  background: #3fb950;
+  opacity: 0.55;
+  box-shadow: none;
+  animation: none;
+}
+
 .conn-capsule--sidebar-dot .conn-tip {
   left: 0;
   top: calc(100% + 8px);
@@ -1079,9 +1081,7 @@ body.mini-ticker-mode .app-shell {
 }
 
 .top-tag-session-plain {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  display: inline;
   padding: 0;
   font-size: 11px;
   font-weight: 400;
@@ -1090,17 +1090,8 @@ body.mini-ticker-mode .app-shell {
   border: none;
 }
 
-.top-tag-session-plain.is-open .top-session-dot {
-  background: #3fb950;
-  box-shadow: none;
-}
-
 .top-tag-session-plain.is-open {
   color: #9ca3af;
-}
-
-.top-tag-session-plain:not(.is-open) .top-session-dot {
-  background: #6e7681;
 }
 
 .top-session-dot {

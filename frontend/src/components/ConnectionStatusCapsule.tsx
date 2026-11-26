@@ -166,25 +166,40 @@ export function ConnectionStatusCapsule({
 
   const linkUp =
     meta.phase === "connected" && meta.online;
+  const afterHours = mode === "closed" && linkUp;
 
-  const tipText =
-    tipStyle === "friendly" && linkUp && !loadError
-      ? `数据连接正常，每 ${pollSec}s 同步`
-      : tipStyle === "friendly" && linkUp && loadError
-        ? `连接正常 · 当前标的行情暂不可用`
-        : tipStyle === "friendly" && mode === "closed"
-          ? "已休市 · 盘后快照"
-          : tipStyle === "friendly" && mode === "failed"
-            ? "连接异常 · 点击重连"
-            : loadError && linkUp
-              ? `连接：${meta.phase}（正常） · 行情：异常 · 数据源：${source} · 心跳：${heartbeat}`
-              : `状态：${meta.phase} | 数据源：${source} | 最后心跳：${heartbeat} | RTT / 间隔：${latency}`;
+  const tipText = (() => {
+    if (tipStyle === "friendly") {
+      if (mode === "failed") return "连接异常 · 点击重连";
+      if (afterHours && !loadError) {
+        return `连接正常 · 已收盘 · 每 ${pollSec}s 快照`;
+      }
+      if (afterHours && loadError) {
+        return "连接正常 · 已收盘 · 当前标的行情暂不可用";
+      }
+      if (mode === "closed") {
+        return meta.phase === "disconnected"
+          ? "未连接 · 休市"
+          : "已休市 · 盘后快照";
+      }
+      if (linkUp && !loadError) {
+        return `数据连接正常，每 ${pollSec}s 同步`;
+      }
+      if (linkUp && loadError) {
+        return "连接正常 · 当前标的行情暂不可用";
+      }
+    }
+    if (loadError && linkUp) {
+      return `连接：${meta.phase}（正常） · 行情：异常 · 数据源：${source} · 心跳：${heartbeat}`;
+    }
+    return `状态：${meta.phase} | 数据源：${source} | 最后心跳：${heartbeat} | RTT / 间隔：${latency}`;
+  })();
 
   return (
     <span
-      className={`conn-capsule conn-capsule--${mode}${clickable ? " conn-capsule--click" : ""}${
-        className ? ` ${className}` : ""
-      }`}
+      className={`conn-capsule conn-capsule--${mode}${afterHours ? " conn-capsule--link-up" : ""}${
+        clickable ? " conn-capsule--click" : ""
+      }${className ? ` ${className}` : ""}`}
       tabIndex={clickable ? 0 : 0}
       onClick={() => clickable && onReconnect?.()}
       onKeyDown={(e) => {

@@ -226,8 +226,7 @@ export function TopStatusBar({
               }`}
               title={marketHint}
             >
-              <span className="top-session-dot" aria-hidden />
-              <span className="top-session-text">{marketHint}</span>
+              {marketHint}
             </span>
           </div>
         </div>
