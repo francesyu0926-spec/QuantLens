@@ -1,6 +1,7 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -50,6 +51,12 @@ interface Props {
   marketBlocked?: boolean;
   marketBlockReason?: string | null;
   onMarketRetry?: () => void;
+  /** 顶栏全局错误条已展示时，子格仅文案、不显示重试 */
+  globalErrorBanner?: boolean;
+  /** 与顶栏「重新加载」联动，重拉各辅助周期 */
+  paneReloadToken?: number;
+  /** 主图展示的是缓存/延迟数据（全局异常时边框变警告色） */
+  primaryStale?: boolean;
 }
 
 export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function ChartPaneGrid({
@@ -76,7 +83,13 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
   marketBlocked = false,
   marketBlockReason = null,
   onMarketRetry,
+  globalErrorBanner = false,
+  paneReloadToken = 0,
+  primaryStale = false,
 }, ref) {
+  const globalMarketFault =
+    Boolean(marketBlockReason) && (marketBlocked || globalErrorBanner);
+  const suppressPaneRetry = globalMarketFault;
   const [ivPickerFor, setIvPickerFor] = useState<number | null>(null);
 
   const intervals = useMemo(() => {
@@ -103,6 +116,16 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
     intervals[3] ?? "1d",
     layout === "quad"
   );
+
+  useEffect(() => {
+    if (paneReloadToken < 1) return;
+    if (!multivPane) return;
+    pane1.retry();
+    if (layout === "quad") {
+      pane2.retry();
+      pane3.retry();
+    }
+  }, [paneReloadToken, multivPane, layout, pane1.retry, pane2.retry, pane3.retry]);
 
   const extraCandles = [primaryCandles, pane1.candles, pane2.candles, pane3.candles];
 
@@ -162,6 +185,7 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
             }
             patternMarkers={patternMarkers}
             autoPriceLines={autoPriceLines}
+            cacheDelayed={primaryStale}
           />
         ) : (
           <div className="chart-pane-empty muted">加载 K 线…</div>
@@ -200,13 +224,23 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
           marketBlockReason ??
           paneErr ??
           (marketBlocked ? "网络超时" : null);
-        const showError =
+        let showError =
           !hasData &&
           (marketBlocked ||
             Boolean(paneErr) ||
             (!paneLoading && !hasData && idx > 0 && paneApi != null));
-        const showLoading =
+        let showLoading =
           !hasData && !showError && (paneLoading || (idx === 0 && !hasData));
+
+        /* 全局错误条展示时：子格不出现「加载中」，统一引导顶栏重新加载 */
+        if (!hasData && globalErrorBanner && globalMarketFault) {
+          showError = true;
+          showLoading = false;
+        }
+
+        const paneDetail = globalMarketFault
+          ? "数据源超时"
+          : paneErr ?? failDetail ?? `暂无 ${labelIv} 数据`;
 
         const onRetryPane = () => {
           if (marketBlocked && onMarketRetry) {
@@ -218,7 +252,9 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
 
         return (
           <div
-            className={`chart-pane${activePane === idx ? " is-active" : ""}`}
+            className={`chart-pane${activePane === idx ? " is-active" : ""}${
+              idx === 0 && primaryStale ? " is-stale-data" : ""
+            }`}
             key={paneId}
             onClick={(e) => {
               e.stopPropagation();
@@ -285,24 +321,19 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
                 }
                 patternMarkers={idx === 0 ? patternMarkers : []}
                 autoPriceLines={idx === 0 ? autoPriceLines : []}
-              />
-            ) : showError ? (
-              <ChartPaneState
-                mode="error"
-                interval={labelIv}
-                detail={failDetail ?? "网络超时"}
-                onRetry={onRetryPane}
+                cacheDelayed={idx === 0 && primaryStale}
               />
             ) : showLoading ? (
               <ChartPaneState mode="loading" interval={labelIv} />
-            ) : (
+            ) : showError || !hasData ? (
               <ChartPaneState
                 mode="error"
                 interval={labelIv}
-                detail={paneErr ?? `暂无 ${labelIv} 数据`}
-                onRetry={paneApi?.retry}
+                detail={paneDetail}
+                onRetry={suppressPaneRetry ? undefined : onRetryPane}
+                suppressRetry={suppressPaneRetry}
               />
-            )}
+            ) : null}
           </div>
         );
       })}

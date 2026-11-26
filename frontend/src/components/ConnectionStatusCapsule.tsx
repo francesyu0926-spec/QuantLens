@@ -45,7 +45,7 @@ function dataSourceLabel(symbol: string): string {
 
 function resolveMode(
   meta: ConnectionMeta,
-  loadError: string | null,
+  _loadError: string | null,
   loading: boolean,
   chartReady: boolean,
   symbol: string,
@@ -60,8 +60,7 @@ function resolveMode(
   if (meta.phase === "disconnected") return "closed";
 
   if (meta.phase === "connected") {
-    if (loadError && !chartReady) return "warn";
-    if (loadError && !loading && !chartReady) return "warn";
+    /* K 线拉取失败不等同于传输层断开，绿点仍以连接/心跳为准 */
     if (loading && !chartReady) {
       return chartStale ? "syncing" : "slow";
     }
@@ -77,8 +76,17 @@ function resolveMode(
 function labelFor(
   mode: ConnectionCapsuleMode,
   meta: ConnectionMeta,
-  pollSec: number
+  pollSec: number,
+  loadError: string | null,
+  chartReady: boolean
 ): string {
+  if (
+    loadError &&
+    !chartReady &&
+    (mode === "poll" || mode === "stream" || mode === "slow" || mode === "syncing")
+  ) {
+    return "行情拉取异常";
+  }
   switch (mode) {
     case "stream": {
       const ms =
@@ -143,7 +151,7 @@ export function ConnectionStatusCapsule({
     chartStale,
     sessionOpen
   );
-  const label = labelFor(mode, meta, pollSec);
+  const label = labelFor(mode, meta, pollSec, loadError, chartReady);
   const source = dataSourceLabel(symbol);
   const clickable = mode === "failed" && Boolean(onReconnect);
 
@@ -156,20 +164,21 @@ export function ConnectionStatusCapsule({
       ? `${meta.latencyMs}ms`
       : "—";
 
-  const healthy =
-    mode === "stream" ||
-    mode === "poll" ||
-    mode === "syncing" ||
-    mode === "slow";
+  const linkUp =
+    meta.phase === "connected" && meta.online;
 
   const tipText =
-    tipStyle === "friendly" && healthy && !loadError
+    tipStyle === "friendly" && linkUp && !loadError
       ? `数据连接正常，每 ${pollSec}s 同步`
-      : tipStyle === "friendly" && mode === "closed"
-        ? "已休市 · 盘后快照"
-        : tipStyle === "friendly" && mode === "failed"
-          ? "连接异常 · 点击重连"
-          : `状态：${meta.phase} | 数据源：${source} | 最后心跳：${heartbeat} | RTT / 间隔：${latency}`;
+      : tipStyle === "friendly" && linkUp && loadError
+        ? `连接正常 · 当前标的行情暂不可用`
+        : tipStyle === "friendly" && mode === "closed"
+          ? "已休市 · 盘后快照"
+          : tipStyle === "friendly" && mode === "failed"
+            ? "连接异常 · 点击重连"
+            : loadError && linkUp
+              ? `连接：${meta.phase}（正常） · 行情：异常 · 数据源：${source} · 心跳：${heartbeat}`
+              : `状态：${meta.phase} | 数据源：${source} | 最后心跳：${heartbeat} | RTT / 间隔：${latency}`;
 
   return (
     <span

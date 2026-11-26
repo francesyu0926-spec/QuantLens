@@ -262,6 +262,7 @@ export default function App() {
   );
   const lastReadySymbol = useRef(DEFAULT_SYMBOL);
   const [showBanner, setShowBanner] = useState(false);
+  const [paneReloadToken, setPaneReloadToken] = useState(0);
 
   const marketMatches = market.symbol === symbol;
   const chartReady = marketMatches && market.candles.length > 0;
@@ -293,9 +294,9 @@ export default function App() {
         price: market.price,
       });
       lastReadySymbol.current = symbol;
-      setShowBanner(false);
+      if (!market.loadError) setShowBanner(false);
     }
-  }, [market.candles, market.price, symbol, interval]);
+  }, [market.candles, market.price, symbol, interval, market.loadError]);
 
   useEffect(() => {
     if (market.loadError && !chartReady) setShowBanner(true);
@@ -586,18 +587,6 @@ export default function App() {
         rightPanelOpen={rightPanelOpen}
       />
 
-      {showBanner && market.loadError && (
-        <ErrorBanner
-          title="行情拉取超时"
-          detail={`切换至 ${symbol} 失败，请检查网络或稍后重试。`}
-          onRetry={market.retry}
-          onDismiss={() => {
-            setShowBanner(false);
-            cancelSwitch();
-          }}
-        />
-      )}
-
       <div
         className={`layout${leftPanelOpen ? "" : " collapsed-left"}${rightPanelOpen ? "" : " collapsed-right"}`}
       >
@@ -634,6 +623,19 @@ export default function App() {
           )}
         </aside>
         <main className="chart-area">
+          {showBanner && market.loadError && (
+            <ErrorBanner
+              title="行情拉取超时，请检查网络或稍后重试"
+              onRetry={() => {
+                market.retry();
+                setPaneReloadToken((t) => t + 1);
+              }}
+              onDismiss={() => {
+                setShowBanner(false);
+                cancelSwitch();
+              }}
+            />
+          )}
           <ChartToolbar
             interval={toolbarInterval}
             onInterval={applyChartInterval}
@@ -656,9 +658,6 @@ export default function App() {
             />
           )}
           <div className="chart-stack">
-            {showStale && (
-              <span className="delayed-tag">延迟 · {chartViewSymbol}</span>
-            )}
             <ChartLoadOverlay
               targetSymbol={symbol}
               interval={interval}
@@ -699,6 +698,14 @@ export default function App() {
                   marketBlocked={Boolean(market.loadError) && !chartReady}
                   marketBlockReason={market.loadError}
                   onMarketRetry={market.retry}
+                  globalErrorBanner={showBanner && Boolean(market.loadError)}
+                  paneReloadToken={paneReloadToken}
+                  primaryStale={
+                    showStale ||
+                    (showBanner &&
+                      Boolean(market.loadError) &&
+                      displayCandles.length > 0)
+                  }
                 />
                 </div>
               </ChartErrorBoundary>

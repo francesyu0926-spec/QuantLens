@@ -57,6 +57,8 @@ interface Props {
   positionCostLine?: { price: number; title: string } | null;
   patternMarkers?: SeriesMarker<Time>[];
   autoPriceLines?: { price: number; title: string; color?: string }[];
+  /** 并入 OHLC 行：缓存/延迟提示（不占悬浮角标） */
+  cacheDelayed?: boolean;
 }
 
 export interface ChartWorkspaceHandle {
@@ -150,6 +152,7 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
       positionCostLine = null,
       patternMarkers = [],
       autoPriceLines = [],
+      cacheDelayed = false,
     },
     ref
   ) {
@@ -334,7 +337,11 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
         vertLines: { color: "#1e293b" },
         horzLines: { color: "#1e293b" },
       },
-      crosshair: { mode: CrosshairMode.Normal },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: { labelVisible: !compact },
+        horzLine: { labelVisible: !compact },
+      },
       timeScale: { borderColor: "#1e293b" },
       rightPriceScale: { borderColor: "#1e293b" },
     };
@@ -366,7 +373,7 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
       wickUpColor: priceColors.up,
       wickDownColor: priceColors.down,
       priceLineVisible: !compact,
-      lastValueVisible: true,
+      lastValueVisible: !compact,
     });
 
     const vol = main.addHistogramSeries({
@@ -561,8 +568,14 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
   useEffect(() => {
     if (!chartReady || !candleSeries.current) return;
     candleSeries.current.applyOptions({
-      priceLineVisible: compact ? false : true,
-      lastValueVisible: true,
+      priceLineVisible: !compact,
+      lastValueVisible: !compact,
+    });
+    mainChart.current?.applyOptions({
+      crosshair: {
+        vertLine: { labelVisible: !compact },
+        horzLine: { labelVisible: !compact },
+      },
     });
   }, [compact, chartReady]);
 
@@ -781,12 +794,12 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
         color: line.color,
         lineWidth: 1,
         lineStyle: REF_LINE_STYLE,
-        axisLabelVisible: true,
+        axisLabelVisible: !compact,
         title: line.title,
       })
     );
     priceLineHandles.current = built;
-  }, [priceLines, positionCostLine, autoPriceLines, chartReady, symbol]);
+  }, [priceLines, positionCostLine, autoPriceLines, chartReady, symbol, compact]);
 
   const leg = legend.visible && legend.close != null ? legend : null;
 
@@ -815,27 +828,45 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
       {leg && (
         <div
           className={`chart-legend chart-legend-compact${
-            legendHover ? " is-crosshair" : ""
-          }`}
+            compact ? " is-dense" : ""
+          }${legendHover ? " is-crosshair" : ""}`}
           aria-live="polite"
         >
           <div className="legend-ohlc tabular">
-            <span className="leg-field">
-              <span className="leg-k">O</span>
-              <span className="leg-v leg-neutral">{formatLegNum(leg.open)}</span>
-            </span>
-            <span className="leg-field">
-              <span className="leg-k">H</span>
-              <span className="leg-v leg-high">{formatLegNum(leg.high)}</span>
-            </span>
-            <span className="leg-field">
-              <span className="leg-k">L</span>
-              <span className="leg-v leg-low">{formatLegNum(leg.low)}</span>
-            </span>
-            <span className="leg-field leg-field-close">
-              <span className="leg-k">C</span>
+            {cacheDelayed && (
               <span
-                className={`leg-v leg-close ${
+                className="legend-cache-warn"
+                title="当前展示缓存或延迟数据，非实时行情"
+              >
+                {compact ? "⚠" : "⚠ 延迟"}
+              </span>
+            )}
+            {!compact && (
+              <>
+                <span className="leg-field">
+                  <span className="leg-k">O</span>
+                  <span className="leg-v leg-neutral">
+                    {formatLegNum(leg.open)}
+                  </span>
+                </span>
+                <span className="leg-field">
+                  <span className="leg-k">H</span>
+                  <span className="leg-v leg-high">
+                    {formatLegNum(leg.high)}
+                  </span>
+                </span>
+                <span className="leg-field">
+                  <span className="leg-k">L</span>
+                  <span className="leg-v leg-low">{formatLegNum(leg.low)}</span>
+                </span>
+              </>
+            )}
+            <span className="leg-field leg-field-close">
+              {!compact && <span className="leg-k">C</span>}
+              <span
+                className={`leg-v leg-close${
+                  compact ? " leg-close-only" : ""
+                } ${
                   leg.close != null && leg.open != null && leg.close >= leg.open
                     ? "leg-up"
                     : "leg-down"
@@ -855,19 +886,33 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
           </div>
           {options.showEma && (
             <>
-              <span className="legend-vrule" aria-hidden />
-              <span className="legend-ema tabular">
-                <span className="leg-field">
+              {!compact && <span className="legend-vrule" aria-hidden />}
+              <span
+                className={`legend-ema tabular${
+                  compact ? " legend-ema--dots-only" : ""
+                }`}
+              >
+                <span
+                  className="leg-field"
+                  title={`EMA20 ${formatLegNum(leg.ema20)}`}
+                >
                   <span className="leg-dot leg-dot-ema20" aria-hidden />
-                  <span className="leg-v leg-neutral">
-                    {formatLegNum(leg.ema20)}
-                  </span>
+                  {!compact && (
+                    <span className="leg-v leg-neutral">
+                      {formatLegNum(leg.ema20)}
+                    </span>
+                  )}
                 </span>
-                <span className="leg-field">
+                <span
+                  className="leg-field"
+                  title={`EMA50 ${formatLegNum(leg.ema50)}`}
+                >
                   <span className="leg-dot leg-dot-ema50" aria-hidden />
-                  <span className="leg-v leg-neutral">
-                    {formatLegNum(leg.ema50)}
-                  </span>
+                  {!compact && (
+                    <span className="leg-v leg-neutral">
+                      {formatLegNum(leg.ema50)}
+                    </span>
+                  )}
                 </span>
               </span>
             </>
