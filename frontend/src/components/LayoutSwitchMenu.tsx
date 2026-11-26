@@ -3,9 +3,25 @@ import { CHART_LAYOUTS, type ChartLayoutMode } from "../types/chart";
 interface Props {
   value: ChartLayoutMode;
   onChange: (v: ChartLayoutMode) => void;
+  noviceMode?: boolean;
 }
 
-export function LayoutSwitchMenu({ value, onChange }: Props) {
+export function LayoutSwitchMenu({
+  value,
+  onChange,
+  noviceMode = false,
+}: Props) {
+  if (noviceMode) {
+    return (
+      <span
+        className="layout-switch-novice"
+        title="小白模式固定单图，专注价格与白话总结"
+      >
+        单图
+      </span>
+    );
+  }
+
   return (
     <div
       className="layout-switch-iconbar"

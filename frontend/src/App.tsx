@@ -34,7 +34,9 @@ import type { AlertSignal, Candle, WatchlistItem } from "./types/market";
 import { usePersistedWatchlist } from "./hooks/usePersistedWatchlist";
 import { usePriceLines } from "./hooks/usePriceLines";
 import { usePriceColorScheme } from "./hooks/usePriceColorScheme";
-import { usePaperTrades } from "./hooks/usePaperTrades";
+import { loadAllPaperTrades, usePaperTrades } from "./hooks/usePaperTrades";
+import { useTradingJournal } from "./hooks/useTradingJournal";
+import { buildDailyReviewMarkdown } from "./utils/dailyReview";
 import {
   defaultDualSecondary,
   QUAD_INTERVALS_DEFAULT,
@@ -43,6 +45,8 @@ import {
 import { useNoviceAssist } from "./hooks/useNoviceAssist";
 import { useWatchlistEmaSignals } from "./hooks/useWatchlistEmaSignals";
 import { MarketBriefBanner } from "./components/MarketBriefBanner";
+import { NoviceOnboardingTour } from "./components/NoviceOnboardingTour";
+import { plainPriceLineTitle } from "./utils/noviceCopy";
 import { DEFAULT_SYMBOL } from "./config/market";
 import { resolveAShareDisplayName } from "./config/aShareDisplayNames";
 import {
@@ -51,9 +55,17 @@ import {
 } from "./config/pinnedWatchlist";
 import { backfillEmaSignals } from "./utils/signalHistory";
 import { MiniTicker } from "./components/MiniTicker";
+import { MarketPulseBar } from "./components/MarketPulseBar";
+import { ClipboardSymbolToast } from "./components/ClipboardSymbolToast";
+import { SectorPeersModal } from "./components/SectorPeersModal";
+import { SignalsDetachedShell } from "./components/SignalsDetachedShell";
 import { useFundamentals } from "./hooks/useFundamentals";
 import { bootstrapUserDataSync } from "./utils/userDataSync";
-import { isTauri, nativeNotify } from "./utils/nativeBridge";
+import {
+  isTauri,
+  nativeNotify,
+  updateTrayQuotes,
+} from "./utils/nativeBridge";
 import {
   findKeyLevels,
   keyLevelDistances,
@@ -92,9 +104,13 @@ function playBeep() {
   }
 }
 
-const MINI_MODE =
-  typeof window !== "undefined" &&
-  new URLSearchParams(window.location.search).get("mode") === "mini";
+const URL_MODE =
+  typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("mode")
+    : null;
+
+const MINI_MODE = URL_MODE === "mini";
+const SIGNALS_MODE = URL_MODE === "signals";
 
 export default function App() {
   const [symbol, setSymbol] = useState(() => {
@@ -169,6 +185,10 @@ export default function App() {
 
   const applyChartInterval = useCallback(
     (iv: TimeInterval) => {
+      setChartOptions((o) => ({
+        ...o,
+        intradayAvg: iv === "1m" ? o.intradayAvg : false,
+      }));
       if (chartLayout === "single") {
         setInterval(iv);
         return;
@@ -188,6 +208,41 @@ export default function App() {
     [chartLayout, multiActivePane]
   );
 
+  const intradayMode =
+    interval === "1m" && chartOptions.intradayAvg && chartLayout === "single";
+
+  const setIntradayMode = useCallback((on: boolean) => {
+    if (on) {
+      setInterval("1m");
+      setChartOptions((o) => ({ ...o, intradayAvg: true }));
+    } else {
+      setChartOptions((o) => ({ ...o, intradayAvg: false }));
+    }
+  }, []);
+
+  const openSectorPeers = useCallback(async (industry: string) => {
+    setSectorIndustry(industry);
+    setSectorOpen(true);
+    setSectorLoading(true);
+    try {
+      const res = await fetch(
+        `${API}/sector/peers?industry=${encodeURIComponent(industry)}`
+      );
+      if (res.ok) {
+        const data = (await res.json()) as {
+          peers?: typeof sectorPeers;
+        };
+        setSectorPeers(data.peers ?? []);
+      } else {
+        setSectorPeers([]);
+      }
+    } catch {
+      setSectorPeers([]);
+    } finally {
+      setSectorLoading(false);
+    }
+  }, []);
+
   const onQuadIvChange = useCallback((idx: number, iv: TimeInterval) => {
     setQuadPaneIvs((prev) => {
       const next = [...prev];
@@ -202,11 +257,43 @@ export default function App() {
   const { rules, setRules } = useAlertRules();
   const { mode: priceColorMode, setMode: setPriceColorMode, colors: priceColors } =
     usePriceColorScheme(symbol);
-  const { noviceMode, toggleNovice } = useNoviceAssist();
+  const {
+    noviceMode,
+    toggleNovice,
+    onboardingDone,
+    completeOnboarding,
+  } = useNoviceAssist();
+  const proChartSnapshot = useRef<ChartDisplayOptions | null>(null);
+  const proLayoutSnapshot = useRef<ChartLayoutMode | null>(null);
+  const [noviceTourPaper, setNoviceTourPaper] = useState(false);
+  const showNoviceTour = noviceMode && !onboardingDone;
+
+  const applyChartLayout = useCallback(
+    (mode: ChartLayoutMode) => {
+      if (noviceMode && mode !== "single") return;
+      setChartLayout(mode);
+    },
+    [noviceMode]
+  );
+
   const { items: watchlistSeed, addSymbol, symbolList } = usePersistedWatchlist();
-  const { lines: priceLines, addLine, removeLine } = usePriceLines(symbol);
+  const {
+    lines: priceLines,
+    addLine,
+    removeLine,
+    toggleLineAlert,
+  } = usePriceLines(symbol);
+  const { entries: journalEntries, addEntry: addJournalEntry } =
+    useTradingJournal();
   const { trades: paperTrades, openPosition, buy: paperBuy, sell: paperSell } =
     usePaperTrades(symbol);
+  const [camouflage, setCamouflage] = useState(false);
+  const [sectorOpen, setSectorOpen] = useState(false);
+  const [sectorIndustry, setSectorIndustry] = useState("");
+  const [sectorPeers, setSectorPeers] = useState<
+    { symbol: string; name: string; change_pct: number; price: number }[]
+  >([]);
+  const [sectorLoading, setSectorLoading] = useState(false);
   const pushedSignals = useRef(new Set<string>());
   const priceLineHits = useRef(new Set<string>());
 
@@ -228,6 +315,22 @@ export default function App() {
   }, [visibleWatchSymbols, symbolList, symbol]);
 
   const quotes = useWatchlistQuotes(quoteSymbols, symbol, market.price);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    const lines = symbolList.slice(0, 5).map((sym) => {
+      const q = quotes[sym];
+      const px =
+        q?.price != null && q.price > 0 ? q.price.toFixed(2) : "—";
+      const pct =
+        q?.changePct != null
+          ? `${q.changePct >= 0 ? "+" : ""}${q.changePct.toFixed(2)}%`
+          : "";
+      return `${sym} ${px} ${pct}`.trim();
+    });
+    const tip = ["QuantLens", ...lines].join("\n");
+    void updateTrayQuotes(tip);
+  }, [quotes, symbolList]);
   const { fundamentals, flow: capitalFlow, loading: fundamentalsLoading } =
     useFundamentals(symbol, !MINI_MODE);
   const prevLiveCount = useRef(0);
@@ -235,6 +338,37 @@ export default function App() {
   useEffect(() => {
     void bootstrapUserDataSync();
   }, []);
+
+  useEffect(() => {
+    if (noviceMode) {
+      if (!proChartSnapshot.current) {
+        proChartSnapshot.current = chartOptions;
+      }
+      setChartOptions((o) => ({
+        ...o,
+        showEma: false,
+        showBoll: false,
+        showVolumeProfile: false,
+        showVolume: true,
+        intradayAvg: false,
+      }));
+      if (chartLayout !== "single" && proLayoutSnapshot.current == null) {
+        proLayoutSnapshot.current = chartLayout;
+      }
+      setChartLayout("single");
+      setLeftPanelOpen(true);
+      setRightPanelOpen(true);
+      return;
+    }
+    if (proChartSnapshot.current) {
+      setChartOptions(proChartSnapshot.current);
+      proChartSnapshot.current = null;
+    }
+    if (proLayoutSnapshot.current) {
+      setChartLayout(proLayoutSnapshot.current);
+      proLayoutSnapshot.current = null;
+    }
+  }, [noviceMode]);
 
   useEffect(() => {
     try {
@@ -398,15 +532,30 @@ export default function App() {
           `${s.message} @${s.price.toFixed(4)}`
         );
       }
-      if (rules.soundEnabled) {
+      if (rules.desktopNotifyEnabled) {
         void nativeNotify(
           `${s.symbol} ${s.rule}`,
           `${s.message} @${s.price.toFixed(2)}`,
           s.symbol
         );
       }
+      if (rules.paperAutoOnSignal && s.symbol === symbol && !openPosition) {
+        const px = s.price > 0 ? s.price : market.price;
+        const bullish = /金叉|超卖|下轨|上穿/i.test(`${s.rule} ${s.message}`);
+        if (bullish && px > 0) paperBuy(px, 100);
+      }
     }
-  }, [market.signals, rules.webhookEnabled, rules.webhookUrl]);
+  }, [
+    market.signals,
+    market.price,
+    rules.webhookEnabled,
+    rules.webhookUrl,
+    rules.desktopNotifyEnabled,
+    rules.paperAutoOnSignal,
+    symbol,
+    openPosition,
+    paperBuy,
+  ]);
 
   const quotePx = quotes[symbol]?.price ?? 0;
   const effectivePrice = chartReady
@@ -431,32 +580,48 @@ export default function App() {
     if (dist.resistance) {
       lines.push({
         price: dist.resistance.price,
-        title: "阻力",
+        title: noviceMode ? plainPriceLineTitle("阻力") : "阻力",
         color: "#F59E0B",
       });
     }
     if (dist.support) {
       lines.push({
         price: dist.support.price,
-        title: "支撑",
+        title: noviceMode ? plainPriceLineTitle("支撑") : "支撑",
         color: "#3B82F6",
       });
     }
     return lines;
-  }, [displayCandles, effectivePrice]);
+  }, [displayCandles, effectivePrice, noviceMode]);
 
   useEffect(() => {
     const px = effectivePrice;
     if (px <= 0) return;
     for (const line of priceLines) {
+      if (line.alert === false) continue;
       const tol = Math.max(line.price * 0.0008, 0.0001);
       if (Math.abs(px - line.price) > tol) continue;
       const key = `${line.id}-${Math.floor(Date.now() / 60_000)}`;
       if (priceLineHits.current.has(key)) continue;
       priceLineHits.current.add(key);
+      const msg = `${symbol} 触及 ${line.label} @${line.price.toFixed(2)}`;
       if (rules.soundEnabled) playBeep();
+      if (rules.desktopNotifyEnabled) {
+        void nativeNotify("画线提醒", msg, symbol);
+      }
+      if (rules.webhookEnabled && rules.webhookUrl.trim()) {
+        void relayWebhook(rules.webhookUrl.trim(), "画线提醒", msg);
+      }
     }
-  }, [effectivePrice, priceLines, rules.soundEnabled]);
+  }, [
+    effectivePrice,
+    priceLines,
+    rules.soundEnabled,
+    rules.desktopNotifyEnabled,
+    rules.webhookEnabled,
+    rules.webhookUrl,
+    symbol,
+  ]);
 
   const quotesLoading = useMemo(() => {
     const sample = watchlistSeed.slice(0, 20);
@@ -491,6 +656,31 @@ export default function App() {
     });
   }, [quotes, symbol, effectivePrice, market.candles, watchlistSeed]);
 
+  const runDailyReview = useCallback(() => {
+    const md = buildDailyReviewMarkdown({
+      watchlist,
+      quotes,
+      signals: displaySignals,
+      paperBySymbol: loadAllPaperTrades(),
+      symbol,
+    });
+    addJournalEntry({
+      symbol,
+      interval,
+      price: effectivePrice,
+      note: md,
+      tags: ["日复盘"],
+    });
+  }, [
+    watchlist,
+    quotes,
+    displaySignals,
+    symbol,
+    interval,
+    effectivePrice,
+    addJournalEntry,
+  ]);
+
   const watchlistDisplay = useMemo(() => {
     if (!screenerSymbols) return watchlist;
     const allow = new Set(screenerSymbols);
@@ -508,6 +698,11 @@ export default function App() {
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
       ) {
+        return;
+      }
+      if (e.altKey && (e.key === "b" || e.key === "B")) {
+        e.preventDefault();
+        setCamouflage((c) => !c);
         return;
       }
       if (e.key === "f" || e.key === "F") {
@@ -542,6 +737,10 @@ export default function App() {
 
   const changePct = quotes[symbol]?.changePct ?? null;
 
+  if (SIGNALS_MODE) {
+    return <SignalsDetachedShell />;
+  }
+
   if (MINI_MODE) {
     return (
       <MiniTicker
@@ -558,7 +757,7 @@ export default function App() {
     <div
       className={`app-shell${leftPanelOpen ? "" : " collapsed-left"}${
         rightPanelOpen ? "" : " collapsed-right"
-      }`}
+      }${camouflage ? " app-shell--camouflage" : ""}`}
       style={shellStyle}
     >
       <TopStatusBar
@@ -577,7 +776,7 @@ export default function App() {
         displayCandles={displayCandles}
         quotes={quotes}
         chartLayout={chartLayout}
-        onChartLayout={setChartLayout}
+        onChartLayout={applyChartLayout}
         noviceMode={noviceMode}
         onToggleNovice={toggleNovice}
         fundamentals={fundamentals}
@@ -585,7 +784,9 @@ export default function App() {
         fundamentalsLoading={fundamentalsLoading}
         leftPanelOpen={leftPanelOpen}
         rightPanelOpen={rightPanelOpen}
+        onIndustryClick={openSectorPeers}
       />
+      <MarketPulseBar />
 
       <div
         className={`layout${leftPanelOpen ? "" : " collapsed-left"}${rightPanelOpen ? "" : " collapsed-right"}`}
@@ -645,13 +846,20 @@ export default function App() {
             lines={priceLines}
             onAddLine={addLine}
             onRemoveLine={removeLine}
+            onToggleLineAlert={toggleLineAlert}
+            intradayMode={intradayMode}
+            onIntraday={setIntradayMode}
             noviceMode={noviceMode}
             chartLayout={chartLayout}
           />
           {noviceMode && displayCandles.length > 0 && (
-            <MarketBriefBanner candles={displayCandles} />
+            <MarketBriefBanner
+              candles={displayCandles}
+              noviceMode
+              capitalFlow={capitalFlow}
+            />
           )}
-          {chartLayout === "single" && (
+          {chartLayout === "single" && !noviceMode && (
             <MultiTimeframeRadar
               symbol={symbol}
               onPickInterval={applyChartInterval}
@@ -684,6 +892,7 @@ export default function App() {
                   priceLines={priceLines}
                   priceColors={priceColors}
                   paperTrades={paperTrades}
+                  journalEntries={journalEntries}
                   openEntry={openPosition?.entry ?? null}
                   livePrice={effectivePrice}
                   onAddPriceLine={(p) => addLine(p, "关键价位")}
@@ -706,6 +915,7 @@ export default function App() {
                       Boolean(market.loadError) &&
                       displayCandles.length > 0)
                   }
+                  noviceMode={noviceMode}
                 />
                 </div>
               </ChartErrorBoundary>
@@ -728,7 +938,8 @@ export default function App() {
               symbol={chartViewSymbol}
               price={effectivePrice}
               supportPrice={
-                autoPriceLines.find((l) => l.title === "支撑")?.price ?? null
+                autoPriceLines.find((l) => l.color === "#3B82F6")?.price ??
+                null
               }
               candles={displayCandles}
               signals={displaySignals}
@@ -752,6 +963,10 @@ export default function App() {
               onTradeClick={(t) => {
                 window.setTimeout(() => chartRef.current?.scrollToBar(t), 80);
               }}
+              onDailyReview={runDailyReview}
+              noviceMode={noviceMode}
+              noviceTourPaper={noviceTourPaper}
+              onNoviceTourPaperSeen={() => setNoviceTourPaper(false)}
             />
           )}
         </aside>
@@ -779,8 +994,77 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         priceColorMode={priceColorMode}
         onPriceColorMode={setPriceColorMode}
+        noviceMode={noviceMode}
       />
 
+      <ClipboardSymbolToast
+        onOpen={(code) => {
+          addSymbol(code, resolveAShareDisplayName(code));
+          setSymbol(code);
+        }}
+      />
+
+      <SectorPeersModal
+        open={sectorOpen}
+        industry={sectorIndustry}
+        loading={sectorLoading}
+        peers={sectorPeers}
+        onClose={() => setSectorOpen(false)}
+        onPick={(sym) => {
+          const peer = sectorPeers.find((p) => p.symbol === sym);
+          addSymbol(sym, peer?.name ?? resolveAShareDisplayName(sym));
+          setSymbol(sym);
+          setSectorOpen(false);
+        }}
+      />
+
+      <NoviceOnboardingTour
+        active={showNoviceTour}
+        onDone={completeOnboarding}
+        onReachPaper={() => {
+          setRightPanelOpen(true);
+          setNoviceTourPaper(true);
+        }}
+      />
+
+      {camouflage && (
+        <div className="camouflage-screen" aria-hidden>
+          <div className="camouflage-doc">
+            <h1>季度经营数据汇总</h1>
+            <table className="camouflage-sheet">
+              <thead>
+                <tr>
+                  <th>项目</th>
+                  <th>Q1</th>
+                  <th>Q2</th>
+                  <th>Q3</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>营业收入</td>
+                  <td>1,284.2</td>
+                  <td>1,356.8</td>
+                  <td>1,402.1</td>
+                </tr>
+                <tr>
+                  <td>毛利率</td>
+                  <td>32.1%</td>
+                  <td>31.8%</td>
+                  <td>32.4%</td>
+                </tr>
+                <tr>
+                  <td>费用率</td>
+                  <td>18.6%</td>
+                  <td>18.2%</td>
+                  <td>17.9%</td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="muted">Alt+B 恢复看盘界面</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

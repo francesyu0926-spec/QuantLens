@@ -27,6 +27,15 @@ from .intervals import normalize_interval
 from .indicators import compute_indicators
 from .rules import scan_signals
 from .fundamentals import fetch_capital_flow_sync, fetch_fundamentals_sync
+from .screener import apply_preset, market_universe_rows
+from .market_pulse import fetch_market_pulse
+from .sector_peers import peers_by_industry
+from .universe_indicators import (
+    ensure_universe_indicators_fresh,
+    filter_universe_technical,
+    rebuild_universe_indicators,
+    universe_build_status,
+)
 from .storage import init_db, save_kline_cache
 from .user_data import (
     DRAWING_PREFIX,
@@ -45,6 +54,8 @@ collector = MarketCollector()
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     await init_db()
+    if A_SHARE_ONLY:
+        asyncio.create_task(ensure_universe_indicators_fresh())
     yield
 
 
@@ -132,10 +143,12 @@ async def capital_flow(symbol: str = Query(...)) -> dict[str, Any]:
 
 class UserDataPut(BaseModel):
     payload: Any
+    client_updated_at: float | None = None
 
 
 class UserDataBulk(BaseModel):
     entries: dict[str, Any] = Field(default_factory=dict)
+    client_updated_at: dict[str, float] = Field(default_factory=dict)
 
 
 @app.get("/sync")
@@ -156,7 +169,7 @@ async def sync_get(all_keys: bool = Query(False)) -> dict[str, Any]:
 async def sync_put_key(key: str, body: UserDataPut) -> dict[str, Any]:
     if key not in SYNC_KEYS and not key.startswith(DRAWING_PREFIX):
         return {"ok": False, "error": "key not allowed"}
-    ts = await user_data_set(key, body.payload)
+    ts = await user_data_set(key, body.payload, body.client_updated_at)
     return {"ok": True, "key": key, "updated_at": ts}
 
 
@@ -167,8 +180,78 @@ async def sync_bulk(body: UserDataBulk) -> dict[str, Any]:
         for k, v in body.entries.items()
         if k in SYNC_KEYS or k.startswith(DRAWING_PREFIX)
     }
-    ts_map = await user_data_bulk_set(filtered)
+    client_times = {
+        k: v
+        for k, v in body.client_updated_at.items()
+        if k in filtered
+    }
+    ts_map = await user_data_bulk_set(filtered, client_times)
     return {"ok": True, "updated_at": ts_map}
+
+
+TECH_SCREENER_PRESETS = frozenset({"oversold", "macd_cross", "above_ema20"})
+
+
+@app.get("/screener/universe")
+async def screener_universe(
+    preset: str = Query("momentum"),
+    limit: int = Query(60, ge=1, le=200),
+) -> dict[str, Any]:
+    if not A_SHARE_ONLY:
+        return {"symbols": [], "count": 0, "scope": "disabled"}
+    if preset in TECH_SCREENER_PRESETS:
+        symbols = await filter_universe_technical(preset, limit=limit)
+        meta = await universe_build_status()
+        if not symbols and int(meta.get("symbol_count") or 0) == 0:
+            asyncio.create_task(rebuild_universe_indicators(400))
+        return {
+            "symbols": symbols,
+            "count": len(symbols),
+            "scope": "market",
+            "preset": preset,
+            "library": meta,
+        }
+    rows = await asyncio.to_thread(market_universe_rows)
+    symbols = apply_preset(preset, rows, limit=limit)
+    return {
+        "symbols": symbols,
+        "count": len(symbols),
+        "scope": "market",
+        "preset": preset,
+        "library": None,
+    }
+
+
+@app.get("/screener/status")
+async def screener_status() -> dict[str, Any]:
+    return await universe_build_status()
+
+
+@app.get("/market/pulse")
+async def market_pulse() -> dict[str, Any]:
+    return await asyncio.to_thread(fetch_market_pulse)
+
+
+@app.get("/sector/peers")
+async def sector_peers(
+    industry: str = Query(..., min_length=1),
+    limit: int = Query(24, ge=1, le=60),
+) -> dict[str, Any]:
+    rows = await asyncio.to_thread(peers_by_industry, industry, limit)
+    return {"industry": industry, "items": rows}
+
+
+@app.post("/screener/rebuild")
+async def screener_rebuild(
+    max_symbols: int = Query(400, ge=100, le=800),
+) -> dict[str, Any]:
+    if not A_SHARE_ONLY:
+        return {"ok": False, "reason": "a_share_only"}
+    st = await universe_build_status()
+    if st.get("running"):
+        return {"ok": False, "reason": "already_running", "status": st}
+    asyncio.create_task(rebuild_universe_indicators(max_symbols))
+    return {"ok": True, "status": "started", "max_symbols": max_symbols}
 
 
 @app.get("/sync/item/{key:path}")

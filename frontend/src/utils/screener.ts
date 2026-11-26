@@ -107,3 +107,63 @@ export async function runScreener(
   await Promise.all(workers);
   return hits;
 }
+
+const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8765";
+
+const PRESET_TO_API: Record<ScreenerPresetId, string> = {
+  momentum: "momentum",
+  oversold: "oversold",
+  macd_cross: "macd_cross",
+  above_ema20: "above_ema20",
+};
+
+export type UniverseLibraryStatus = {
+  running?: boolean;
+  processed?: number;
+  total?: number;
+  symbol_count?: number;
+  built_at?: number;
+  status?: string;
+};
+
+export async function fetchUniverseLibraryStatus(): Promise<UniverseLibraryStatus | null> {
+  try {
+    const res = await fetch(`${API}/screener/status`);
+    if (!res.ok) return null;
+    return (await res.json()) as UniverseLibraryStatus;
+  } catch {
+    return null;
+  }
+}
+
+export async function triggerUniverseRebuild(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API}/screener/rebuild?max_symbols=400`, {
+      method: "POST",
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { ok?: boolean };
+    return Boolean(data.ok);
+  } catch {
+    return false;
+  }
+}
+
+export async function runUniverseScreener(
+  preset: ScreenerPresetId
+): Promise<{ symbols: string[]; library?: UniverseLibraryStatus | null }> {
+  const mapped = PRESET_TO_API[preset] ?? "momentum";
+  try {
+    const res = await fetch(
+      `${API}/screener/universe?preset=${encodeURIComponent(mapped)}&limit=80`
+    );
+    if (!res.ok) return { symbols: [] };
+    const data = (await res.json()) as {
+      symbols?: string[];
+      library?: UniverseLibraryStatus | null;
+    };
+    return { symbols: data.symbols ?? [], library: data.library };
+  } catch {
+    return { symbols: [] };
+  }
+}

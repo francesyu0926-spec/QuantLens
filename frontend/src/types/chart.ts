@@ -23,6 +23,8 @@ export interface ChartDisplayOptions {
   showBoll: boolean;
   showVolume: boolean;
   showVolumeProfile: boolean;
+  /** 1m 下叠加均价（分时黄线） */
+  intradayAvg: boolean;
   subChart: "macd" | "rsi";
 }
 
@@ -31,5 +33,6 @@ export const DEFAULT_CHART_OPTIONS: ChartDisplayOptions = {
   showBoll: true,
   showVolume: true,
   showVolumeProfile: false,
+  intradayAvg: false,
   subChart: "macd",
 };

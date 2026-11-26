@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 
 const KEY = "quantlens-novice-assist";
+const ONBOARD_KEY = "quantlens-novice-onboard-v1";
 
 function load(): boolean {
   try {
@@ -10,8 +11,17 @@ function load(): boolean {
   }
 }
 
+function loadOnboard(): boolean {
+  try {
+    return localStorage.getItem(ONBOARD_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function useNoviceAssist() {
   const [enabled, setEnabled] = useState(load);
+  const [onboardingDone, setOnboardingDone] = useState(loadOnboard);
 
   const toggle = useCallback(() => {
     setEnabled((on) => {
@@ -42,5 +52,23 @@ export function useNoviceAssist() {
     }
   }, []);
 
-  return { noviceMode: enabled, toggleNovice: toggle, setNoviceMode: setOn };
+  const completeOnboarding = useCallback(() => {
+    setOnboardingDone(true);
+    try {
+      localStorage.setItem(ONBOARD_KEY, "1");
+      void import("../utils/userDataSync").then(({ syncUserDataKey }) =>
+        syncUserDataKey(ONBOARD_KEY, "1")
+      );
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  return {
+    noviceMode: enabled,
+    toggleNovice: toggle,
+    setNoviceMode: setOn,
+    onboardingDone,
+    completeOnboarding,
+  };
 }

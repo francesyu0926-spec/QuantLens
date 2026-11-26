@@ -10,6 +10,30 @@ export const SYNC_MANAGED_KEYS = [
 ] as const;
 
 const DRAWING_PREFIX = "quantlens.priceLines.";
+const LOCAL_SYNC_META_KEY = "quantlens.user-data-meta";
+
+type SyncMeta = Record<string, number>;
+
+function readSyncMeta(): SyncMeta {
+  try {
+    const raw = localStorage.getItem(LOCAL_SYNC_META_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as SyncMeta;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSyncMeta(meta: SyncMeta) {
+  localStorage.setItem(LOCAL_SYNC_META_KEY, JSON.stringify(meta));
+}
+
+function touchLocalKey(key: string) {
+  const meta = readSyncMeta();
+  meta[key] = Date.now() / 1000;
+  writeSyncMeta(meta);
+}
 
 function localDrawingEntries(): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -41,16 +65,17 @@ function readLocalKey(key: string): unknown {
   }
 }
 
-function writeLocalKey(key: string, value: unknown) {
+function writeLocalKey(key: string, value: unknown, touchMeta = true) {
   if (value == null) {
     localStorage.removeItem(key);
     return;
   }
   if (typeof value === "string") {
     localStorage.setItem(key, value);
-    return;
+  } else {
+    localStorage.setItem(key, JSON.stringify(value));
   }
-  localStorage.setItem(key, JSON.stringify(value));
+  if (touchMeta) touchLocalKey(key);
 }
 
 export async function pullUserDataFromServer(): Promise<number> {
@@ -59,12 +84,24 @@ export async function pullUserDataFromServer(): Promise<number> {
     if (!res.ok) return -1;
     const data = (await res.json()) as {
       entries?: Record<string, unknown>;
+      updated_at?: Record<string, number>;
     };
     const entries = data.entries ?? {};
+    const serverMeta = data.updated_at ?? {};
+    const localMeta = readSyncMeta();
+    let applied = 0;
+    const nextMeta = { ...localMeta };
     for (const [key, val] of Object.entries(entries)) {
-      writeLocalKey(key, val);
+      const serverTs = serverMeta[key] ?? 0;
+      const localTs = localMeta[key] ?? 0;
+      if (serverTs >= localTs || localTs === 0) {
+        writeLocalKey(key, val, false);
+        nextMeta[key] = serverTs || Date.now() / 1000;
+        applied += 1;
+      }
     }
-    return Object.keys(entries).length;
+    writeSyncMeta(nextMeta);
+    return applied;
   } catch {
     return -1;
   }
@@ -74,16 +111,26 @@ export async function pushLocalUserDataToServer(): Promise<boolean> {
   const entries: Record<string, unknown> = {
     ...localDrawingEntries(),
   };
+  const client_updated_at: Record<string, number> = {};
+  const meta = readSyncMeta();
   for (const key of SYNC_MANAGED_KEYS) {
     const val = readLocalKey(key);
-    if (val !== undefined) entries[key] = val;
+    if (val !== undefined) {
+      entries[key] = val;
+      client_updated_at[key] = meta[key] ?? Date.now() / 1000;
+    }
+  }
+  for (const key of Object.keys(entries)) {
+    if (key.startsWith(DRAWING_PREFIX) && client_updated_at[key] == null) {
+      client_updated_at[key] = meta[key] ?? Date.now() / 1000;
+    }
   }
   if (Object.keys(entries).length === 0) return true;
   try {
     const res = await fetch(`${API}/sync/bulk`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entries }),
+      body: JSON.stringify({ entries, client_updated_at }),
     });
     return res.ok;
   } catch {
@@ -96,11 +143,13 @@ export async function syncUserDataKey(key: string, payload: unknown): Promise<vo
     SYNC_MANAGED_KEYS.includes(key as (typeof SYNC_MANAGED_KEYS)[number]) ||
     key.startsWith(DRAWING_PREFIX);
   if (!allowed) return;
+  touchLocalKey(key);
+  const client_updated_at = readSyncMeta()[key] ?? Date.now() / 1000;
   try {
     await fetch(`${API}/sync/${encodeURIComponent(key)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ payload }),
+      body: JSON.stringify({ payload, client_updated_at }),
     });
   } catch {
     /* offline */
@@ -113,7 +162,5 @@ export async function bootstrapUserDataSync(): Promise<void> {
     await pushLocalUserDataToServer();
     return;
   }
-  if (n === 0) {
-    await pushLocalUserDataToServer();
-  }
+  await pushLocalUserDataToServer();
 }

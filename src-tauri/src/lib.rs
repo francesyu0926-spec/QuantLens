@@ -1,11 +1,18 @@
+use std::sync::Mutex;
+
 use tauri::{
     menu::{Menu, MenuItem},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager, WindowEvent,
+    tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
+    Emitter, Manager, State, WindowEvent,
 };
 use tauri_plugin_global_shortcut::ShortcutState;
 use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
+
+struct EngineChild(pub Mutex<Option<CommandChild>>);
+
+struct TrayHandle(pub Mutex<Option<TrayIcon>>);
 
 fn toggle_main(app: &tauri::AppHandle) {
     let Some(win) = app.get_webview_window("main") else {
@@ -16,6 +23,16 @@ fn toggle_main(app: &tauri::AppHandle) {
     } else {
         let _ = win.show();
         let _ = win.set_focus();
+    }
+}
+
+fn stop_sidecar(app: &tauri::AppHandle) {
+    if let Some(child_state) = app.try_state::<EngineChild>() {
+        if let Ok(mut guard) = child_state.0.lock() {
+            if let Some(child) = guard.take() {
+                let _ = child.kill();
+            }
+        }
     }
 }
 
@@ -70,6 +87,29 @@ fn toggle_mini_ticker(app: tauri::AppHandle, show: bool) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn open_signals_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("signals") {
+        win.show().map_err(|e| e.to_string())?;
+        win.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    Err("signals window missing".into())
+}
+
+#[tauri::command]
+fn update_tray_tooltip(
+    tray_state: State<'_, TrayHandle>,
+    tooltip: String,
+) -> Result<(), String> {
+    let guard = tray_state.0.lock().map_err(|e| e.to_string())?;
+    if let Some(tray) = guard.as_ref() {
+        tray.set_tooltip(Some(&tooltip))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -86,17 +126,27 @@ pub fn run() {
                 })
                 .build(),
         )
+        .manage(EngineChild(Mutex::new(None)))
+        .manage(TrayHandle(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             notify_signal,
             focus_main_window,
             toggle_mini_ticker,
+            update_tray_tooltip,
+            open_signals_window,
         ])
         .setup(|app| {
             #[cfg(desktop)]
             {
                 let sidecar = app.shell().sidecar("quantlens-engine");
                 if let Ok(cmd) = sidecar {
-                    let _child = cmd.spawn();
+                    if let Ok((_rx, child)) = cmd.spawn() {
+                        if let Some(state) = app.try_state::<EngineChild>() {
+                            if let Ok(mut guard) = state.0.lock() {
+                                *guard = Some(child);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -120,7 +170,7 @@ pub fn run() {
                 let menu = Menu::with_items(app, &[&show_i, &mini_i, &quit_i])?;
                 if let Some(icon) = app.default_window_icon().cloned() {
                     let handle = app.handle().clone();
-                    let _tray = TrayIconBuilder::new()
+                    let tray = TrayIconBuilder::new()
                         .icon(icon)
                         .menu(&menu)
                         .tooltip("QuantLens")
@@ -135,6 +185,7 @@ pub fn run() {
                                 let _ = toggle_mini_ticker(handle.clone(), true);
                             }
                             "quit" => {
+                                stop_sidecar(&app);
                                 app.exit(0);
                             }
                             _ => {}
@@ -150,6 +201,11 @@ pub fn run() {
                             }
                         })
                         .build(app)?;
+                    if let Some(tray_state) = app.try_state::<TrayHandle>() {
+                        if let Ok(mut guard) = tray_state.0.lock() {
+                            *guard = Some(tray);
+                        }
+                    }
                 }
             }
             Ok(())

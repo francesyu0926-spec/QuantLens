@@ -1,5 +1,6 @@
 import type { AlertRules } from "../hooks/useAlertRules";
 import type { AlertSignal } from "../types/market";
+import { plainSignalMessage } from "../utils/noviceCopy";
 
 export type SignalScope = "current" | "watchlist";
 
@@ -10,6 +11,7 @@ interface Props {
   scope: SignalScope;
   onScopeChange: (scope: SignalScope) => void;
   className?: string;
+  noviceMode?: boolean;
 }
 
 function signalTone(rule: string): "bull" | "bear" | "neutral" {
@@ -57,6 +59,7 @@ export function SignalLog({
   scope,
   onScopeChange,
   className,
+  noviceMode = false,
 }: Props) {
   const visible = signals
     .filter((s) => ruleEnabled(s.rule, rules, s.message))
@@ -70,7 +73,7 @@ export function SignalLog({
   return (
     <section className={`signal-log${className ? ` ${className}` : ""}`}>
       <header className="signal-head">
-        <h2>策略信号</h2>
+        <h2>{noviceMode ? "提醒记录" : "策略信号"}</h2>
         <div className="signal-scope" role="group" aria-label="信号范围">
           <button
             type="button"
@@ -98,7 +101,11 @@ export function SignalLog({
       </header>
       <div className="log-scroll">
         {visible.length === 0 && (
-          <p className="muted empty-hint">等待规则触发，或查看历史回填金叉/死叉</p>
+          <p className="muted empty-hint">
+            {noviceMode
+              ? "系统会自动记录动能强弱等白话提醒"
+              : "等待规则触发，或查看历史回填金叉/死叉"}
+          </p>
         )}
         {visible.map((sig, index) => {
           const tone = signalTone(sig.rule);
@@ -126,7 +133,9 @@ export function SignalLog({
                       NEW
                     </span>
                   )}
-                  {stripHist(sig.message)}
+                  {noviceMode
+                    ? plainSignalMessage(sig.rule, stripHist(sig.message))
+                    : stripHist(sig.message)}
                 </span>
                 <time>{formatSignalTime(sig)}</time>
               </div>

@@ -5,6 +5,8 @@ export interface PriceLineDef {
   price: number;
   label: string;
   color: string;
+  /** 价格触及该线时触发声音/通知 */
+  alert?: boolean;
 }
 
 const keyFor = (symbol: string) => `quantlens.priceLines.${symbol}`;
@@ -45,6 +47,7 @@ export function usePriceLines(symbol: string) {
           price,
           label,
           color,
+          alert: true,
         },
       ]);
     },
@@ -56,5 +59,14 @@ export function usePriceLines(symbol: string) {
     [lines, persist]
   );
 
-  return { lines, addLine, removeLine, setLines: persist };
+  const toggleLineAlert = useCallback(
+    (id: string) => {
+      persist(
+        lines.map((l) => (l.id === id ? { ...l, alert: !l.alert } : l))
+      );
+    },
+    [lines, persist]
+  );
+
+  return { lines, addLine, removeLine, toggleLineAlert, setLines: persist };
 }

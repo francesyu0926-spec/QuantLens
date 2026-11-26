@@ -3422,6 +3422,30 @@ body.mini-ticker-mode .app-shell {
   box-shadow: var(--md-elev-1);
 }
 
+.screener-scope {
+  display: flex;
+  gap: 1rem;
+  margin: 0.35rem 0 0.65rem;
+  flex-wrap: wrap;
+}
+
+.screener-lib-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.35rem;
+}
+
+.screener-lib-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.screener-rebuild-btn {
+  align-self: flex-start;
+}
+
 .screener-list {
   list-style: none;
   margin: 0.75rem 0;
@@ -6550,4 +6574,333 @@ body.mini-ticker-mode .app-shell {
   font-size: 0.85rem;
   line-height: 1.55;
   white-space: pre-wrap;
+}
+
+.market-pulse {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  padding: 0.35rem 1rem;
+  font-size: 0.78rem;
+  border-bottom: 1px solid var(--md-outline-variant, 0.25);
+  background: var(--md-surface-container-low);
+}
+
+.market-pulse--auction {
+  background: rgba(250, 204, 21, 0.08);
+}
+
+.market-pulse-tag {
+  font-weight: 600;
+  color: #ca8a04;
+}
+
+.market-pulse-item strong {
+  margin-left: 0.2rem;
+}
+
+.fund-micro-tag--link,
+.fund-meta-industry-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+}
+
+.fund-micro-tag--link:hover,
+.fund-meta-industry-btn:hover {
+  color: var(--md-primary);
+}
+
+.sector-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.sector-panel {
+  width: min(420px, 96vw);
+  max-height: min(70vh, 520px);
+  overflow: auto;
+  background: var(--md-surface-container);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+}
+
+.sector-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.sector-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sector-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.45rem 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.sector-row:hover {
+  background: rgba(88, 166, 255, 0.08);
+}
+
+.clip-toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  background: var(--md-surface-container-high);
+  border: 1px solid var(--md-outline-variant);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  font-size: 0.82rem;
+}
+
+.clip-toast-dismiss {
+  min-width: 2rem;
+}
+
+.draw-item-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.draw-bell {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.45;
+  font-size: 0.9rem;
+  padding: 0.15rem 0.35rem;
+}
+
+.draw-bell.on {
+  opacity: 1;
+}
+
+.chip.on-soft {
+  opacity: 0.85;
+  box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.45);
+}
+
+.journal-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.app-shell--camouflage .layout,
+.app-shell--camouflage .top-status-bar,
+.app-shell--camouflage .market-pulse {
+  visibility: hidden;
+}
+
+.camouflage-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #f8fafc;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.camouflage-doc h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+}
+
+.camouflage-sheet {
+  width: min(640px, 90vw);
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.camouflage-sheet th,
+.camouflage-sheet td {
+  border: 1px solid #cbd5e1;
+  padding: 0.45rem 0.65rem;
+  text-align: right;
+}
+
+.camouflage-sheet th:first-child,
+.camouflage-sheet td:first-child {
+  text-align: left;
+}
+
+.signals-detached-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--md-surface);
+}
+
+.signals-detached-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid #334155;
+}
+
+.signal-log-detached {
+  flex: 1;
+  min-height: 0;
+}
+
+.dock-detach-row {
+  padding: 0.35rem 0.5rem 0;
+}
+
+.health-card-novice .health-fold-text {
+  font-size: 0.78rem;
+}
+
+.health-traffic {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.5rem 0;
+  font-size: 0.78rem;
+}
+
+.health-traffic-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.health-traffic--sunny .health-traffic-dot {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
+}
+
+.health-traffic--cloudy .health-traffic-dot {
+  background: #eab308;
+  box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.22);
+}
+
+.health-traffic--rainy .health-traffic-dot {
+  background: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.22);
+}
+
+.market-brief-novice .market-brief-lead {
+  font-size: 0.9rem;
+}
+
+.novice-vol-tag {
+  cursor: default;
+  pointer-events: none;
+}
+
+.paper-novice-risk {
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  border-radius: 8px;
+  background: rgba(88, 166, 255, 0.06);
+  border: 1px solid rgba(88, 166, 255, 0.18);
+}
+
+.paper-novice-risk-label {
+  display: block;
+  font-size: 0.8rem;
+  margin-bottom: 0.35rem;
+}
+
+.paper-novice-risk-val {
+  font-weight: 700;
+  margin: 0 0.2rem;
+  color: var(--md-primary);
+}
+
+.paper-novice-slider {
+  width: 100%;
+  margin: 0.25rem 0 0.35rem;
+}
+
+.paper-novice-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.novice-tour-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 8000;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.novice-tour-card {
+  width: min(420px, 96vw);
+  background: var(--md-surface-container-high);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.novice-tour-title {
+  margin: 0.25rem 0;
+  font-size: 1rem;
+}
+
+.novice-tour-body {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--md-on-surface-variant);
+}
+
+.novice-tour-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.layout-switch-novice {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  background: rgba(88, 166, 255, 0.12);
+  color: var(--md-on-surface-variant);
+  white-space: nowrap;
 }

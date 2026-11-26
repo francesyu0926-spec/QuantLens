@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AlertRules } from "../hooks/useAlertRules";
 import type { PaperTrade } from "../hooks/usePaperTrades";
 import { TradingJournalPanel } from "./TradingJournalPanel";
+import { isTauri, openSignalsWindow } from "../utils/nativeBridge";
 import type { AlertSignal, Candle } from "../types/market";
 import type { TimeInterval } from "../types/chart";
 import { A_SHARE_ONLY } from "../config/market";
@@ -31,6 +32,10 @@ interface Props {
   supportPrice?: number | null;
   watchlistSymbols?: string[];
   onTradeClick?: (barTime: number) => void;
+  onDailyReview?: () => void;
+  noviceMode?: boolean;
+  noviceTourPaper?: boolean;
+  onNoviceTourPaperSeen?: () => void;
 }
 
 export function RightDock({
@@ -50,8 +55,13 @@ export function RightDock({
   chartInterval = "1m",
   supportPrice = null,
   watchlistSymbols = [],
+  onDailyReview,
+  noviceMode = false,
+  noviceTourPaper = false,
+  onNoviceTourPaperSeen,
 }: Props) {
   const [tab, setTab] = useState<Tab>("signals");
+  const [maxLossYuan, setMaxLossYuan] = useState(500);
   const [paperQty, setPaperQty] = useState("100");
   const [entry, setEntry] = useState("");
   const [stop, setStop] = useState("");
@@ -102,6 +112,32 @@ export function RightDock({
     return { lossAmt, lossPct, sugShares };
   }, [entry, stop, price, paperQty, posCalc]);
 
+  useEffect(() => {
+    if (!noviceMode) return;
+    if (tab === "backtest" || tab === "depth" || tab === "signals") {
+      setTab("journal");
+    }
+  }, [noviceMode, tab]);
+
+  useEffect(() => {
+    if (noviceTourPaper) {
+      setTab("position");
+      onNoviceTourPaperSeen?.();
+    }
+  }, [noviceTourPaper, onNoviceTourPaperSeen]);
+
+  const novicePaperPlan = useMemo(() => {
+    const e = Number(entry) || price;
+    if (!(e > 0) || maxLossYuan <= 0) return null;
+    const stopPx = supportPrice && supportPrice < e ? supportPrice : e * 0.97;
+    const riskPerShare = e - stopPx;
+    if (riskPerShare <= 0) return null;
+    const step = A_SHARE_ONLY ? 100 : 1;
+    const raw = maxLossYuan / riskPerShare;
+    const shares = Math.max(step, Math.floor(raw / step) * step);
+    return { stopPx, shares, riskPerShare };
+  }, [entry, price, supportPrice, maxLossYuan]);
+
   const loadDepth = async () => {
     if (!symbol.includes("/")) return;
     try {
@@ -121,7 +157,11 @@ export function RightDock({
 
   return (
     <aside className="right-dock">
-      <MarketHealthCard candles={candles} price={price} />
+      <MarketHealthCard
+        candles={candles}
+        price={price}
+        noviceMode={noviceMode}
+      />
       <nav className="dock-tabs" aria-label="右侧面板">
         <button
           type="button"
@@ -133,15 +173,20 @@ export function RightDock({
           ▸
         </button>
         {(
-          [
-            ["signals", "信号", "策略信号"],
-            ["position", "持仓", "模拟持仓"],
-            ["backtest", "回测", "快速回测"],
-            ["journal", "笔记", "复盘笔记"],
-            ...(!A_SHARE_ONLY
-              ? ([["depth", "盘口", "盘口深度"]] as const)
-              : []),
-          ] as readonly [Tab, string, string][]
+          noviceMode
+            ? ([
+                ["position", "练习", "模拟练习"],
+                ["journal", "笔记", "复盘笔记"],
+              ] as const)
+            : ([
+                ["signals", "信号", "策略信号"],
+                ["position", "持仓", "模拟持仓"],
+                ["backtest", "回测", "快速回测"],
+                ["journal", "笔记", "复盘笔记"],
+                ...(!A_SHARE_ONLY
+                  ? ([["depth", "盘口", "盘口深度"]] as const)
+                  : []),
+              ] as const)
         ).map(([id, short, title]) => (
           <button
             key={id}
@@ -159,19 +204,38 @@ export function RightDock({
       </nav>
 
       {tab === "signals" && (
-        <SignalLog
-          className="signal-log-dock"
-          signals={signals}
-          rules={rules}
-          scope={scope}
-          onScopeChange={onScopeChange}
-          onPick={onPickSignal}
-        />
+        <>
+          {isTauri() && (
+            <div className="dock-detach-row">
+              <button
+                type="button"
+                className="chip tiny"
+                onClick={() => void openSignalsWindow()}
+              >
+                弹出信号窗
+              </button>
+            </div>
+          )}
+          <SignalLog
+            className="signal-log-dock"
+            signals={signals}
+            rules={rules}
+            scope={scope}
+            onScopeChange={onScopeChange}
+            onPick={onPickSignal}
+            noviceMode={noviceMode}
+          />
+        </>
       )}
 
       {tab === "position" && (
-        <section className="dock-panel paper-panel">
-          <h2 className="paper-panel-title">模拟持仓</h2>
+        <section
+          className="dock-panel paper-panel"
+          data-novice-tour="paper"
+        >
+          <h2 className="paper-panel-title">
+            {noviceMode ? "模拟练习" : "模拟持仓"}
+          </h2>
           <div className="paper-inline-field">
             <span className="paper-inline-label">开仓价</span>
             <input
@@ -190,41 +254,75 @@ export function RightDock({
               现价
             </button>
           </div>
-          <div className="paper-stop-block">
-            <div className="paper-inline-field">
-              <span className="paper-inline-label">止损价</span>
+          {noviceMode ? (
+            <div className="paper-novice-risk">
+              <label className="paper-novice-risk-label">
+                我愿意最多亏
+                <span className="tabular paper-novice-risk-val">
+                  {maxLossYuan}
+                </span>
+                元
+              </label>
               <input
-                className="paper-inline-input tabular"
-                value={stop}
-                onChange={(e) => setStop(e.target.value)}
-                placeholder="选填"
-                inputMode="decimal"
+                type="range"
+                className="paper-novice-slider"
+                min={100}
+                max={3000}
+                step={100}
+                value={maxLossYuan}
+                onChange={(e) => setMaxLossYuan(Number(e.target.value))}
               />
+              {novicePaperPlan && (
+                <p className="paper-novice-hint muted">
+                  建议买{" "}
+                  <strong className="tabular">{novicePaperPlan.shares}</strong>{" "}
+                  股；跌到{" "}
+                  <strong className="tabular">
+                    {novicePaperPlan.stopPx.toFixed(2)}
+                  </strong>{" "}
+                  附近止损（约亏 {maxLossYuan} 元）
+                </p>
+              )}
             </div>
-            <div className="paper-stop-chips">
-              <button
-                type="button"
-                className="paper-chip-btn"
-                disabled={!(price > 0)}
-                onClick={() => {
-                  const ref = Number(entry) || price;
-                  setStop((ref * 0.98).toFixed(2));
-                }}
-              >
-                -2%
-              </button>
-              <button
-                type="button"
-                className="paper-chip-btn"
-                disabled={supportPrice == null}
-                onClick={() =>
-                  supportPrice != null && setStop(supportPrice.toFixed(2))
-                }
-              >
-                支撑位
-              </button>
+          ) : (
+            <div className="paper-stop-block">
+              <div className="paper-inline-field">
+                <span className="paper-inline-label">止损价</span>
+                <input
+                  className="paper-inline-input tabular"
+                  value={stop}
+                  onChange={(e) => setStop(e.target.value)}
+                  placeholder="选填"
+                  inputMode="decimal"
+                />
+              </div>
+              <div className="paper-stop-chips">
+                <button
+                  type="button"
+                  className="paper-chip-btn"
+                  disabled={!(price > 0)}
+                  onClick={() => {
+                    const ref = Number(entry) || price;
+                    setStop((ref * 0.98).toFixed(2));
+                  }}
+                >
+                  -2%
+                </button>
+                <button
+                  type="button"
+                  className="paper-chip-btn"
+                  disabled={supportPrice == null}
+                  onClick={() =>
+                    supportPrice != null && setStop(supportPrice.toFixed(2))
+                  }
+                >
+                  支撑位
+                </button>
+              </div>
             </div>
-          </div>
+          )}
+          {!noviceMode && (
+          <>
           <div className="paper-capital-row">
             <label className="paper-capital-cell">
               <span className="paper-field-label">总资金</span>
@@ -275,17 +373,25 @@ export function RightDock({
               </button>
             ))}
           </div>
+          </>
+          )}
           <div className="paper-actions paper-actions-grid">
             <button
               type="button"
               className="paper-btn-buy"
               disabled={!(price > 0)}
               onClick={() => {
-                const q = Number(paperQty);
-                if (q > 0) onPaperBuy?.(q);
+                const q = novicePaperPlan?.shares ?? Number(paperQty);
+                if (q > 0) {
+                  if (noviceMode && novicePaperPlan) {
+                    setStop(novicePaperPlan.stopPx.toFixed(2));
+                    setPaperQty(String(novicePaperPlan.shares));
+                  }
+                  onPaperBuy?.(q);
+                }
               }}
             >
-              市价买入
+              {noviceMode ? "练习买入" : "市价买入"}
             </button>
             <button
               type="button"
@@ -308,23 +414,25 @@ export function RightDock({
               ))}
             </ul>
           )}
-          <div className="paper-risk-card">
-            {riskSummary ? (
-              <div className="paper-risk-cols">
-                <span className="paper-risk-item tabular pnl-down">
-                  预估亏损 {riskSummary.lossAmt.toFixed(2)} (
-                  {riskSummary.lossPct.toFixed(1)}%)
-                </span>
-                <span className="paper-risk-item tabular">
-                  建议股数 {riskSummary.sugShares} 股
-                </span>
-              </div>
-            ) : (
-              <p className="paper-risk-hint muted">
-                输入止损价自动测算最大亏损与建议仓位
-              </p>
-            )}
-          </div>
+          {!noviceMode && (
+            <div className="paper-risk-card">
+              {riskSummary ? (
+                <div className="paper-risk-cols">
+                  <span className="paper-risk-item tabular pnl-down">
+                    预估亏损 {riskSummary.lossAmt.toFixed(2)} (
+                    {riskSummary.lossPct.toFixed(1)}%)
+                  </span>
+                  <span className="paper-risk-item tabular">
+                    建议股数 {riskSummary.sugShares} 股
+                  </span>
+                </div>
+              ) : (
+                <p className="paper-risk-hint muted">
+                  输入止损价自动测算最大亏损与建议仓位
+                </p>
+              )}
+            </div>
+          )}
         </section>
       )}
 
@@ -334,6 +442,7 @@ export function RightDock({
           interval={chartInterval}
           price={price}
           extraTags={paperOpen ? ["持仓中"] : []}
+          onDailyReview={onDailyReview}
         />
       )}
 

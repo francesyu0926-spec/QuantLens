@@ -12,6 +12,7 @@ import pandas as pd
 from .config import AKSHARE_POLL_SEC
 from .intervals import akshare_minute_period, normalize_interval
 from .models import Candle, SymbolBook
+from .rate_limit import AKSHARE_FETCH_LIMITER
 
 logger = logging.getLogger(__name__)
 CN_TZ = ZoneInfo("Asia/Shanghai")
@@ -204,6 +205,7 @@ def _fetch_daily(code: str) -> list[Candle]:
 
 
 def fetch_bars(code: str, interval: str = "1m") -> list[Candle]:
+    AKSHARE_FETCH_LIMITER.acquire(1.0)
     iv = normalize_interval(interval)
     if iv == "1d":
         try:

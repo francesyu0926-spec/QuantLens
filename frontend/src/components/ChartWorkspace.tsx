@@ -26,6 +26,7 @@ import type { AlertSignal, Candle } from "../types/market";
 import type { ChartDisplayOptions } from "../types/chart";
 import type { PriceLineDef } from "../hooks/usePriceLines";
 import type { PaperTrade } from "../hooks/usePaperTrades";
+import type { JournalEntry } from "../hooks/useTradingJournal";
 import { dedupeCandles, sanitizeMarkers } from "../utils/candles";
 import { buildVolumeProfile } from "../utils/volumeProfile";
 import { mergeRefLines, REF_LINE_COLORS } from "../utils/refLines";
@@ -54,6 +55,7 @@ interface Props {
   peerCrosshairTime?: number | null;
   onCrosshairTime?: (time: number | null, paneId: string) => void;
   paperTrades?: PaperTrade[];
+  journalEntries?: JournalEntry[];
   positionCostLine?: { price: number; title: string } | null;
   patternMarkers?: SeriesMarker<Time>[];
   autoPriceLines?: { price: number; title: string; color?: string }[];
@@ -119,6 +121,18 @@ const AUX_LINE = {
   lastValueVisible: false,
 } as const;
 
+function sessionVwap(candles: Candle[]): number[] {
+  let cumV = 0;
+  let cumPv = 0;
+  return candles.map((c) => {
+    const v = c.volume > 0 ? c.volume : 1;
+    const tp = (c.high + c.low + c.close) / 3;
+    cumV += v;
+    cumPv += tp * v;
+    return cumV > 0 ? cumPv / cumV : c.close;
+  });
+}
+
 function toLineData(
   candles: Candle[],
   values: number[]
@@ -149,6 +163,7 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
       peerCrosshairTime,
       onCrosshairTime,
       paperTrades = [],
+      journalEntries = [],
       positionCostLine = null,
       patternMarkers = [],
       autoPriceLines = [],
@@ -166,6 +181,7 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
   const volSeries = useRef<ISeriesApi<"Histogram"> | null>(null);
   const ema20Series = useRef<ISeriesApi<"Line"> | null>(null);
   const ema50Series = useRef<ISeriesApi<"Line"> | null>(null);
+  const avgSeries = useRef<ISeriesApi<"Line"> | null>(null);
   const bbUp = useRef<ISeriesApi<"Line"> | null>(null);
   const bbMid = useRef<ISeriesApi<"Line"> | null>(null);
   const bbLow = useRef<ISeriesApi<"Line"> | null>(null);
@@ -243,6 +259,44 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
         };
       });
   }, [paperTrades, candles, symbol, priceColors]);
+
+  const journalMarkers = useMemo((): SeriesMarker<Time>[] => {
+    const times = new Set(candles.map((c) => c.time));
+    return journalEntries
+      .filter((e) => e.symbol === symbol)
+      .map((e) => {
+        const bar = Math.floor(e.ts / 1000);
+        let t = bar;
+        if (!times.has(t)) {
+          const nearest = candles.reduce(
+            (best, c) =>
+              Math.abs(c.time - bar) < Math.abs(best.time - bar) ? c : best,
+            candles[0]
+          );
+          t = nearest?.time ?? bar;
+        }
+        const tag = e.tags[0] ?? "";
+        const open = tag.includes("开");
+        const close = tag.includes("平");
+        const watch = tag.includes("观察");
+        return {
+          time: t as Time,
+          position: open
+            ? ("belowBar" as const)
+            : close
+              ? ("aboveBar" as const)
+              : ("inBar" as const),
+          color: open ? "#f59e0b" : close ? "#94a3b8" : "#60a5fa",
+          shape: "circle" as const,
+          text: open ? "开" : close ? "平" : watch ? "观" : "笔",
+        };
+      });
+  }, [journalEntries, candles, symbol]);
+
+  const vwap = useMemo(
+    () => (options.intradayAvg ? sessionVwap(candles) : []),
+    [candles, options.intradayAvg]
+  );
 
   const signalMarkers = useMemo((): SeriesMarker<Time>[] => {
     return signals
@@ -393,6 +447,12 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
     ema50Series.current = main.addLineSeries({
       color: "#a371f7",
       lineWidth: 3,
+      ...AUX_LINE,
+    });
+    avgSeries.current = main.addLineSeries({
+      color: "#facc15",
+      lineWidth: 2,
+      lineStyle: 0,
       ...AUX_LINE,
     });
     bbUp.current = main.addLineSeries({
@@ -640,6 +700,7 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
         ...histMarkers,
         ...signalMarkers,
         ...paperMarkers,
+        ...journalMarkers,
         ...patternMarkers,
         ...focusMarkers,
       ].slice(-60),
@@ -677,6 +738,14 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
     } else {
       ema20Series.current?.setData([]);
       ema50Series.current?.setData([]);
+    }
+
+    const showAvg = options.intradayAvg && vwap.length > 0;
+    avgSeries.current?.applyOptions({ visible: showAvg });
+    if (showAvg) {
+      avgSeries.current?.setData(toLineData(candles, vwap));
+    } else {
+      avgSeries.current?.setData([]);
     }
 
     const showBoll = options.showBoll;
@@ -736,6 +805,8 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
     signalMarkers,
     focusTime,
     paperMarkers,
+    journalMarkers,
+    vwap,
     patternMarkers,
     priceColors,
     hideSubChart,

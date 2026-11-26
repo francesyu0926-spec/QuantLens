@@ -13,6 +13,7 @@ from .models import Candle, SymbolBook
 from .market_mode import reject_unless_allowed
 from .symbols import classify_market
 from .yfinance_us import YfinanceUSFeed, fetch_us_bars
+from .storage import load_kline_cache
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,31 @@ class MarketCollector:
                 merge_candles(book, candles)
             except Exception as exc:
                 logger.exception("ensure_history failed %s@%s: %s", symbol, iv, exc)
+            if not book.candles:
+                cached = await load_kline_cache(symbol, iv)
+                if cached:
+                    from .models import Candle as C
+
+                    stale = [
+                        C(
+                            time=int(r["time"]),
+                            open=float(r["open"]),
+                            high=float(r["high"]),
+                            low=float(r["low"]),
+                            close=float(r["close"]),
+                            volume=float(r.get("volume") or 0),
+                        )
+                        for r in cached
+                        if isinstance(r, dict) and "time" in r
+                    ]
+                    if stale:
+                        merge_candles(book, stale)
+                        logger.info(
+                            "Loaded kline cache fallback for %s@%s (%d bars)",
+                            symbol,
+                            iv,
+                            len(stale),
+                        )
             return book
 
     async def watch(

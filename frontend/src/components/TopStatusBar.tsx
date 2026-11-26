@@ -12,6 +12,7 @@ import {
   FundamentalBadges,
 } from "./FundamentalBadges";
 import { isTauri, toggleMiniTicker } from "../utils/nativeBridge";
+import { plainMainFlowLabel } from "../utils/noviceCopy";
 import { IconAiDiagnose, IconSmartInterpret } from "./TopBarFeatureIcons";
 
 function exchangeSuffix(code: string): string {
@@ -46,6 +47,7 @@ interface Props {
   /** 左侧栏展开时，同步状态在顶栏左锚点，品牌仅在侧栏 */
   leftPanelOpen?: boolean;
   rightPanelOpen?: boolean;
+  onIndustryClick?: (industry: string) => void;
 }
 
 export function TopStatusBar({
@@ -73,6 +75,7 @@ export function TopStatusBar({
   fundamentalsLoading = false,
   leftPanelOpen = true,
   rightPanelOpen = true,
+  onIndustryClick,
 }: Props) {
   const headerDensity =
     chartLayout === "quad"
@@ -233,7 +236,10 @@ export function TopStatusBar({
 
         <div className={`top-zone-mid top-quote-hub${toneClass}`}>
           <div className={`top-quote-stack top-quote-hero${toneClass}`}>
-            <span className={`top-quote-px tabular${toneClass}`}>
+            <span
+              className={`top-quote-px tabular${toneClass}`}
+              data-novice-tour="price"
+            >
               {displayPrice}
             </span>
             {priceMove && (
@@ -252,6 +258,8 @@ export function TopStatusBar({
                 loading={fundamentalsLoading}
                 variant="micro"
                 align="left"
+                onIndustryClick={onIndustryClick}
+                noviceMode={noviceMode}
               />
             </div>
             {/^\d{6}$/.test(symbol) && (
@@ -270,31 +278,45 @@ export function TopStatusBar({
               className={`top-main-flow top-main-flow-wide tabular${
                 flowUp ? " up" : " down"
               }`}
-              title="主力净流入（今日）"
+              title={
+                noviceMode ? "大资金今日买卖方向" : "主力净流入（今日）"
+              }
             >
-              <span className="top-main-flow-k">主力净流入</span>
+              <span className="top-main-flow-k">
+                {noviceMode ? plainMainFlowLabel(flowUp) : "主力净流入"}
+              </span>
               <span className="top-main-flow-v">{mainFlowText}</span>
             </p>
           )}
         </div>
 
         <div className="top-zone-right top-zone top-zone-actions">
-            <LayoutSwitchMenu value={chartLayout} onChange={onChartLayout} />
+            <LayoutSwitchMenu
+              value={chartLayout}
+              onChange={onChartLayout}
+              noviceMode={noviceMode}
+            />
             <div className="top-ai-group top-actions-secondary">
               <button
                 type="button"
                 className={`top-btn top-btn-feature-ghost top-btn-ai${
                   noviceMode ? " on" : ""
                 }`}
-                title="智能解读：指标白话与盘面提示"
-                aria-label="智能解读"
+                title={
+                  noviceMode
+                    ? "已开启小白模式，点击切回专业版"
+                    : "小白模式：白话看盘、简化界面"
+                }
+                aria-label={noviceMode ? "小白模式已开启" : "开启小白模式"}
                 aria-pressed={noviceMode}
                 onClick={onToggleNovice}
               >
                 <span className="top-btn-ico" aria-hidden>
                   <IconSmartInterpret />
                 </span>
-                <span className="top-btn-label">解读</span>
+                <span className="top-btn-label">
+                  {noviceMode ? "小白版" : "专业"}
+                </span>
               </button>
               <button
                 type="button"

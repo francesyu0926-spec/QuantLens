@@ -30,6 +30,16 @@
         "alwaysOnTop": true,
         "visible": false,
         "skipTaskbar": true
+      },
+      {
+        "label": "signals",
+        "title": "QuantLens 信号",
+        "url": "index.html?mode=signals",
+        "width": 420,
+        "height": 640,
+        "resizable": true,
+        "visible": false,
+        "skipTaskbar": false
       }
     ],
     "security": {
@@ -38,6 +48,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all"
+    "targets": "all",
+    "externalBin": ["binaries/quantlens-engine"]
   }
 }

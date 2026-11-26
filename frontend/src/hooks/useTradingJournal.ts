@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export interface JournalEntry {
   id: string;
@@ -11,6 +11,7 @@ export interface JournalEntry {
 }
 
 const STORAGE_KEY = "quantlens-trading-journal";
+export const JOURNAL_CHANGED_EVENT = "quantlens-journal-changed";
 
 function load(): JournalEntry[] {
   try {
@@ -28,10 +29,19 @@ function save(rows: JournalEntry[]) {
   void import("../utils/userDataSync").then(({ syncUserDataKey }) =>
     syncUserDataKey(STORAGE_KEY, clipped)
   );
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(JOURNAL_CHANGED_EVENT));
+  }
 }
 
 export function useTradingJournal() {
   const [entries, setEntries] = useState<JournalEntry[]>(() => load());
+
+  useEffect(() => {
+    const refresh = () => setEntries(load());
+    window.addEventListener(JOURNAL_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(JOURNAL_CHANGED_EVENT, refresh);
+  }, []);
 
   const addEntry = useCallback(
     (input: Omit<JournalEntry, "id" | "ts">) => {

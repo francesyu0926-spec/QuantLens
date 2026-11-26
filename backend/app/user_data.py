@@ -61,10 +61,19 @@ async def user_data_get(key: str) -> dict[str, Any] | None:
         }
 
 
-async def user_data_set(key: str, payload: Any) -> float:
+async def user_data_set(key: str, payload: Any, client_updated_at: float | None = None) -> float:
     ts = time.time()
     text = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
     async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute(
+            "SELECT updated_at FROM user_data WHERE key = ?",
+            (key,),
+        )
+        row = await cur.fetchone()
+        if row and client_updated_at is not None:
+            if float(row["updated_at"]) > client_updated_at:
+                return float(row["updated_at"])
         await db.execute(
             """
             INSERT INTO user_data (key, payload, updated_at)
@@ -104,10 +113,25 @@ async def user_data_list(prefix: str | None = None) -> dict[str, Any]:
     return {"entries": entries, "updated_at": meta}
 
 
-async def user_data_bulk_set(entries: dict[str, Any]) -> dict[str, float]:
+async def user_data_bulk_set(
+    entries: dict[str, Any],
+    client_times: dict[str, float] | None = None,
+) -> dict[str, float]:
     ts_map: dict[str, float] = {}
+    client_times = client_times or {}
     async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
         for key, payload in entries.items():
+            client_ts = client_times.get(key)
+            if client_ts is not None:
+                cur = await db.execute(
+                    "SELECT updated_at FROM user_data WHERE key = ?",
+                    (key,),
+                )
+                row = await cur.fetchone()
+                if row and float(row["updated_at"]) > client_ts:
+                    ts_map[key] = float(row["updated_at"])
+                    continue
             ts = time.time()
             text = (
                 payload

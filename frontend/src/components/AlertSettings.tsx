@@ -8,6 +8,10 @@ import {
   downloadUserDataBackup,
   restoreUserDataFromFile,
 } from "../utils/userDataBackup";
+import {
+  NOVICE_ALERT_RULE_LABELS,
+  NOVICE_NOTIFY_LABELS,
+} from "../utils/noviceCopy";
 
 const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8765";
 
@@ -33,6 +37,7 @@ interface Props {
   priceColorMode: PriceColorMode;
   onPriceColorMode: (m: PriceColorMode) => void;
   onDataRestored?: () => void;
+  noviceMode?: boolean;
 }
 
 function M3Switch({
@@ -85,6 +90,7 @@ export function AlertSettings({
   priceColorMode,
   onPriceColorMode,
   onDataRestored,
+  noviceMode = false,
 }: Props) {
   const [testState, setTestState] = useState<"idle" | "ok" | "fail">("idle");
   const [backupMsg, setBackupMsg] = useState<string | null>(null);
@@ -161,30 +167,57 @@ export function AlertSettings({
         </div>
 
         <div className="settings-card">
-          <h4 className="settings-card-title">策略预警条件</h4>
+          <h4 className="settings-card-title">
+            {noviceMode ? "涨跌提醒（白话）" : "策略预警条件"}
+          </h4>
+          {noviceMode && (
+            <p className="settings-card-hint muted">
+              以下为同一套规则的白话说明，开关仍按原逻辑生效。
+            </p>
+          )}
           <div className="settings-rule-grid">
             <M3Switch
-              label="EMA 金叉 / 死叉"
+              label={
+                noviceMode
+                  ? NOVICE_ALERT_RULE_LABELS.emaCross
+                  : "EMA 金叉 / 死叉"
+              }
               checked={rules.emaCross}
               onChange={(v) => onChange({ ...rules, emaCross: v })}
             />
             <M3Switch
-              label="RSI(14) < 30 超卖"
+              label={
+                noviceMode
+                  ? NOVICE_ALERT_RULE_LABELS.rsiOversold
+                  : "RSI(14) < 30 超卖"
+              }
               checked={rules.rsiOversold}
               onChange={(v) => onChange({ ...rules, rsiOversold: v })}
             />
             <M3Switch
-              label="RSI(14) > 70 超买"
+              label={
+                noviceMode
+                  ? NOVICE_ALERT_RULE_LABELS.rsiOverbought
+                  : "RSI(14) > 70 超买"
+              }
               checked={rules.rsiOverbought}
               onChange={(v) => onChange({ ...rules, rsiOverbought: v })}
             />
             <M3Switch
-              label="跌破布林下轨"
+              label={
+                noviceMode
+                  ? NOVICE_ALERT_RULE_LABELS.bbLower
+                  : "跌破布林下轨"
+              }
               checked={rules.bbLower}
               onChange={(v) => onChange({ ...rules, bbLower: v })}
             />
             <M3Switch
-              label="突破布林上轨"
+              label={
+                noviceMode
+                  ? NOVICE_ALERT_RULE_LABELS.bbUpper
+                  : "突破布林上轨"
+              }
               checked={rules.bbUpper}
               onChange={(v) => onChange({ ...rules, bbUpper: v })}
             />
@@ -264,16 +297,40 @@ export function AlertSettings({
         </div>
 
         <div className="settings-card">
-          <h4 className="settings-card-title">通知与推送</h4>
+          <h4 className="settings-card-title">
+            {noviceMode ? "怎么通知我" : "通知与推送"}
+          </h4>
           <M3Switch
-            label="触发时播放提示音"
+            label={
+              noviceMode ? NOVICE_NOTIFY_LABELS.sound : "触发时播放提示音"
+            }
             checked={rules.soundEnabled}
             onChange={(v) => onChange({ ...rules, soundEnabled: v })}
           />
           <M3Switch
-            label="推送到 Webhook"
+            label={
+              noviceMode
+                ? NOVICE_NOTIFY_LABELS.desktop
+                : "桌面系统通知（Tauri）"
+            }
+            checked={rules.desktopNotifyEnabled}
+            onChange={(v) => onChange({ ...rules, desktopNotifyEnabled: v })}
+          />
+          <M3Switch
+            label={
+              noviceMode ? NOVICE_NOTIFY_LABELS.webhook : "推送到 Webhook"
+            }
             checked={rules.webhookEnabled}
             onChange={(v) => onChange({ ...rules, webhookEnabled: v })}
+          />
+          <M3Switch
+            label={
+              noviceMode
+                ? NOVICE_NOTIFY_LABELS.paperAuto
+                : "信号触发自动模拟买入（100 股）"
+            }
+            checked={rules.paperAutoOnSignal}
+            onChange={(v) => onChange({ ...rules, paperAutoOnSignal: v })}
           />
           {rules.webhookEnabled && (
             <div className="settings-webhook-block">

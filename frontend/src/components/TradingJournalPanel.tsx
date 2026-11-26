@@ -11,6 +11,7 @@ interface Props {
   interval: TimeInterval;
   price: number;
   extraTags?: string[];
+  onDailyReview?: () => void;
 }
 
 export function TradingJournalPanel({
@@ -18,6 +19,7 @@ export function TradingJournalPanel({
   interval,
   price,
   extraTags = [],
+  onDailyReview,
 }: Props) {
   const { entries, addEntry, removeEntry } = useTradingJournal();
   const [note, setNote] = useState("");
@@ -53,7 +55,19 @@ export function TradingJournalPanel({
     <section className="dock-panel journal-panel">
       <header className="journal-title-row">
         <h2 className="journal-title">复盘笔记</h2>
-        <span className="journal-storage muted">本地已存 {countLabel}</span>
+        <div className="journal-title-actions">
+          {onDailyReview && (
+            <button
+              type="button"
+              className="journal-chip"
+              title="生成今日复盘 Markdown"
+              onClick={onDailyReview}
+            >
+              日复盘
+            </button>
+          )}
+          <span className="journal-storage muted">本地已存 {countLabel}</span>
+        </div>
       </header>
 
       <div className="journal-quick" role="group" aria-label="快捷标签">

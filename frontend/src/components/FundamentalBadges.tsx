@@ -1,4 +1,5 @@
 import type { CapitalFlowSnapshot, FundamentalsSnapshot } from "../hooks/useFundamentals";
+import { valuationVerdict } from "../utils/noviceCopy";
 
 function formatCap(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "—";
@@ -69,6 +70,8 @@ interface Props {
   /** 顶栏：弱化文字行，不展示主力进度条 */
   variant?: "chips" | "compact" | "micro";
   align?: "left" | "right" | "center";
+  onIndustryClick?: (industry: string) => void;
+  noviceMode?: boolean;
 }
 
 export function FundamentalBadges({
@@ -77,6 +80,8 @@ export function FundamentalBadges({
   loading,
   variant = "compact",
   align = "right",
+  onIndustryClick,
+  noviceMode = false,
 }: Props) {
   if (!/^\d{6}$/.test(symbol)) return null;
 
@@ -122,25 +127,47 @@ export function FundamentalBadges({
   if (!hasFund || !fundamentals) return null;
 
   if (variant === "micro") {
-  const microTag = (label: string, value: string) => (
-      <span className="fund-micro-tag" key={label}>
-        <span className="fund-micro-k">{label}</span>
-        <span className="fund-micro-mid" aria-hidden>
-          ·
+    const microTag = (label: string, value: string, clickable?: boolean) => {
+      const inner = (
+        <>
+          <span className="fund-micro-k">{label}</span>
+          <span className="fund-micro-mid" aria-hidden>
+            ·
+          </span>
+          <span className="fund-micro-v">{value}</span>
+        </>
+      );
+      if (clickable && fundamentals.industry && onIndustryClick) {
+        return (
+          <button
+            type="button"
+            className="fund-micro-tag fund-micro-tag--link"
+            key={label}
+            title="查看板块联动"
+            onClick={() => onIndustryClick(fundamentals.industry!)}
+          >
+            {inner}
+          </button>
+        );
+      }
+      return (
+        <span className="fund-micro-tag" key={label}>
+          {inner}
         </span>
-        <span className="fund-micro-v">{value}</span>
-      </span>
-    );
+      );
+    };
     return (
       <div
         className={`fund-micro-row fund-micro-row--${align}`}
         title="基本面快照"
       >
-        {microTag("行业", fundamentals.industry ?? "—")}
-        {fundamentals.pe_ttm != null && fundamentals.pe_ttm > 0
-          ? microTag("PE", formatPe(pe))
-          : null}
-        {fundamentals.pb != null && fundamentals.pb > 0
+        {microTag("行业", fundamentals.industry ?? "—", true)}
+        {noviceMode
+          ? microTag("估值", valuationVerdict(pe))
+          : fundamentals.pe_ttm != null && fundamentals.pe_ttm > 0
+            ? microTag("PE", formatPe(pe))
+            : null}
+        {!noviceMode && fundamentals.pb != null && fundamentals.pb > 0
           ? microTag("PB", formatPe(fundamentals.pb))
           : null}
         {microTag("市值", formatCap(fundamentals.market_cap))}
@@ -157,15 +184,30 @@ export function FundamentalBadges({
         className={`fund-meta-line fund-meta-line--${align}`}
         title="基本面快照"
       >
-        <span>
-          <span className="fund-meta-k">行业</span>
-          <span className="fund-meta-mid" aria-hidden>
-            ·
+        {fundamentals.industry && onIndustryClick ? (
+          <button
+            type="button"
+            className="fund-meta-industry-btn"
+            title="板块联动"
+            onClick={() => onIndustryClick(fundamentals.industry!)}
+          >
+            <span className="fund-meta-k">行业</span>
+            <span className="fund-meta-mid" aria-hidden>
+              ·
+            </span>
+            <span className="fund-meta-v">{fundamentals.industry}</span>
+          </button>
+        ) : (
+          <span>
+            <span className="fund-meta-k">行业</span>
+            <span className="fund-meta-mid" aria-hidden>
+              ·
+            </span>
+            <span className="fund-meta-v">
+              {fundamentals.industry ?? "—"}
+            </span>
           </span>
-          <span className="fund-meta-v">
-            {fundamentals.industry ?? "—"}
-          </span>
-        </span>
+        )}
         {fundamentals.pe_ttm != null && fundamentals.pe_ttm > 0 ? (
           <>
             <span className="fund-meta-sep" aria-hidden>

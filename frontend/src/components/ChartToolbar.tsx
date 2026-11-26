@@ -7,6 +7,7 @@ import type {
 import { INTERVALS } from "../types/chart";
 import type { PriceLineDef } from "../hooks/usePriceLines";
 import { INDICATOR_PLAIN_TIPS } from "../utils/marketPlainLanguage";
+import { NOVICE_INTERVALS } from "../utils/noviceCopy";
 
 interface Props {
   interval: TimeInterval;
@@ -17,6 +18,9 @@ interface Props {
   lines: PriceLineDef[];
   onAddLine: (price: number, label: string) => void;
   onRemoveLine: (id: string) => void;
+  onToggleLineAlert?: (id: string) => void;
+  intradayMode?: boolean;
+  onIntraday?: (on: boolean) => void;
   noviceMode?: boolean;
   chartLayout?: ChartLayoutMode;
 }
@@ -78,10 +82,18 @@ export function ChartToolbar({
   lines,
   onAddLine,
   onRemoveLine,
+  onToggleLineAlert,
+  intradayMode = false,
+  onIntraday,
   noviceMode = false,
   chartLayout = "single",
 }: Props) {
   const hideDrawTools = chartLayout !== "single";
+  const intervalChoices = noviceMode
+    ? INTERVALS.filter((iv) =>
+        (NOVICE_INTERVALS as readonly string[]).includes(iv)
+      )
+    : INTERVALS;
   const [drawOpen, setDrawOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -98,11 +110,23 @@ export function ChartToolbar({
     <div className="chart-toolbar chart-toolbar-unified">
       <div className="toolbar-leading">
       <div className="interval-group">
-        {INTERVALS.map((iv) => (
+        {!noviceMode && (
+          <button
+            type="button"
+            className={`chip ${intradayMode ? "on" : ""}`}
+            title="分时 · 1 分钟均价线"
+            onClick={() => onIntraday?.(!intradayMode)}
+          >
+            分时
+          </button>
+        )}
+        {intervalChoices.map((iv) => (
           <button
             key={iv}
             type="button"
-            className={`chip ${interval === iv ? "on" : ""}`}
+            className={`chip ${interval === iv && !intradayMode ? "on" : ""}${
+              interval === iv && intradayMode ? " on-soft" : ""
+            }`}
             onClick={() => onInterval(iv)}
           >
             {iv}
@@ -113,55 +137,68 @@ export function ChartToolbar({
       <span className="toolbar-vdiv" aria-hidden />
 
       <div className="toggle-group">
-        <IndicatorToggle
-          label="EMA"
-          on={options.showEma}
-          showTip={noviceMode}
-          onClick={() => onOptions({ ...options, showEma: !options.showEma })}
-        />
-        <IndicatorToggle
-          label="BOLL"
-          on={options.showBoll}
-          showTip={noviceMode}
-          onClick={() => onOptions({ ...options, showBoll: !options.showBoll })}
-        />
-        <button
-          type="button"
-          className={`chip ${options.showVolume ? "on" : ""}`}
-          onClick={() =>
-            onOptions({ ...options, showVolume: !options.showVolume })
-          }
-        >
-          VOL
-        </button>
-        <button
-          type="button"
-          className={`chip ${options.showVolumeProfile ? "on" : ""}`}
-          onClick={() =>
-            onOptions({
-              ...options,
-              showVolumeProfile: !options.showVolumeProfile,
-            })
-          }
-        >
-          VP
-        </button>
-        <IndicatorToggle
-          label="MACD"
-          on={options.subChart === "macd"}
-          showTip={noviceMode}
-          onClick={() => onOptions({ ...options, subChart: "macd" })}
-        />
-        <IndicatorToggle
-          label="RSI"
-          on={options.subChart === "rsi"}
-          showTip={noviceMode}
-          onClick={() => onOptions({ ...options, subChart: "rsi" })}
-        />
+        {!noviceMode && (
+          <>
+            <IndicatorToggle
+              label="EMA"
+              on={options.showEma}
+              showTip={noviceMode}
+              onClick={() =>
+                onOptions({ ...options, showEma: !options.showEma })
+              }
+            />
+            <IndicatorToggle
+              label="BOLL"
+              on={options.showBoll}
+              showTip={noviceMode}
+              onClick={() =>
+                onOptions({ ...options, showBoll: !options.showBoll })
+              }
+            />
+            <button
+              type="button"
+              className={`chip ${options.showVolume ? "on" : ""}`}
+              onClick={() =>
+                onOptions({ ...options, showVolume: !options.showVolume })
+              }
+            >
+              VOL
+            </button>
+            <button
+              type="button"
+              className={`chip ${options.showVolumeProfile ? "on" : ""}`}
+              onClick={() =>
+                onOptions({
+                  ...options,
+                  showVolumeProfile: !options.showVolumeProfile,
+                })
+              }
+            >
+              VP
+            </button>
+            <IndicatorToggle
+              label="MACD"
+              on={options.subChart === "macd"}
+              showTip={noviceMode}
+              onClick={() => onOptions({ ...options, subChart: "macd" })}
+            />
+            <IndicatorToggle
+              label="RSI"
+              on={options.subChart === "rsi"}
+              showTip={noviceMode}
+              onClick={() => onOptions({ ...options, subChart: "rsi" })}
+            />
+          </>
+        )}
+        {noviceMode && options.showVolume && (
+          <span className="chip on novice-vol-tag" title="成交量反映买卖活跃度">
+            买卖活跃度
+          </span>
+        )}
       </div>
       </div>
 
-      {!hideDrawTools && (
+      {!hideDrawTools && !noviceMode && (
       <div className="draw-menu" ref={menuRef}>
         <button
           type="button"
@@ -200,14 +237,24 @@ export function ChartToolbar({
               </>
             )}
             {lines.map((l) => (
-              <button
-                key={l.id}
-                type="button"
-                className="draw-item draw-item-line"
-                onClick={() => onRemoveLine(l.id)}
-              >
-                移除 {l.label} @{l.price.toFixed(2)}
-              </button>
+              <div key={l.id} className="draw-item-row">
+                <button
+                  type="button"
+                  className={`draw-bell${l.alert !== false ? " on" : ""}`}
+                  title="触及该线时提醒"
+                  disabled={!onToggleLineAlert}
+                  onClick={() => onToggleLineAlert?.(l.id)}
+                >
+                  🔔
+                </button>
+                <button
+                  type="button"
+                  className="draw-item draw-item-line"
+                  onClick={() => onRemoveLine(l.id)}
+                >
+                  移除 {l.label} @{l.price.toFixed(2)}
+                </button>
+              </div>
             ))}
           </div>
         )}

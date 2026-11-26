@@ -10,13 +10,23 @@ import {
   findKeyLevels,
   keyLevelDistances,
 } from "../utils/chartPatterns";
+import {
+  noviceHealthOneLiner,
+  trafficLightFromCandles,
+  trafficLightLabel,
+} from "../utils/noviceCopy";
 
 interface Props {
   candles: Candle[];
   price: number;
+  noviceMode?: boolean;
 }
 
-export function MarketHealthCard({ candles, price }: Props) {
+export function MarketHealthCard({
+  candles,
+  price,
+  noviceMode = false,
+}: Props) {
   const [expanded, setExpanded] = useState(false);
   const health = useMemo(() => computeHealthScore(candles), [candles]);
   const dist = useMemo(() => {
@@ -34,14 +44,18 @@ export function MarketHealthCard({ candles, price }: Props) {
   if (dist.toSupportPct != null) {
     levelChips.push({
       key: "sup",
-      label: `支撑 ${dist.toSupportPct.toFixed(2)}%`,
+      label: noviceMode
+        ? `距止跌位 ${dist.toSupportPct.toFixed(2)}%`
+        : `支撑 ${dist.toSupportPct.toFixed(2)}%`,
       kind: "support",
     });
   }
   if (dist.toResistancePct != null) {
     levelChips.push({
       key: "res",
-      label: `阻力 +${dist.toResistancePct.toFixed(2)}%`,
+      label: noviceMode
+        ? `距压力位 +${dist.toResistancePct.toFixed(2)}%`
+        : `阻力 +${dist.toResistancePct.toFixed(2)}%`,
       kind: "warn",
     });
   }
@@ -60,16 +74,31 @@ export function MarketHealthCard({ candles, price }: Props) {
       ? dist.support.price.toFixed(2)
       : null;
 
-  const summaryBits = [
-    `多空评分 ${health.score}（${health.label}）`,
-    supportPx ? `支撑 ${supportPx}` : null,
-  ].filter(Boolean);
+  const traffic = noviceMode ? trafficLightFromCandles(candles) : null;
+
+  const summaryBits = noviceMode
+    ? [
+        trafficLightLabel(traffic ?? "cloudy"),
+        noviceHealthOneLiner(health.score, health.warnings),
+      ]
+    : [
+        `多空评分 ${health.score}（${health.label}）`,
+        supportPx ? `支撑 ${supportPx}` : null,
+      ].filter(Boolean);
 
   return (
     <section
-      className={`health-card${expanded ? " is-expanded" : " is-collapsed"}`}
-      aria-label="多空体检分"
+      className={`health-card${expanded ? " is-expanded" : " is-collapsed"}${
+        noviceMode ? " health-card-novice" : ""
+      }`}
+      aria-label={noviceMode ? "今日强弱" : "多空体检分"}
     >
+      {noviceMode && traffic && (
+        <div className={`health-traffic health-traffic--${traffic}`}>
+          <span className="health-traffic-dot" aria-hidden />
+          <span className="health-traffic-label">{trafficLightLabel(traffic)}</span>
+        </div>
+      )}
       <button
         type="button"
         className="health-fold-bar"
@@ -98,7 +127,11 @@ export function MarketHealthCard({ candles, price }: Props) {
               }}
             />
           </div>
-          <p className="health-advice">{health.advice}</p>
+          <p className="health-advice">
+            {noviceMode
+              ? noviceHealthOneLiner(health.score, health.warnings)
+              : health.advice}
+          </p>
           {levelChips.length > 0 && (
             <div className="health-assist-chips">
               {levelChips.map((chip) => (

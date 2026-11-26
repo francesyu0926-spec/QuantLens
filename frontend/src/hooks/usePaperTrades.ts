@@ -11,7 +11,7 @@ export interface PaperTrade {
 
 const STORAGE_KEY = "quantlens-paper-trades";
 
-function loadAll(): Record<string, PaperTrade[]> {
+export function loadAllPaperTrades(): Record<string, PaperTrade[]> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
@@ -33,7 +33,7 @@ export function usePaperTrades(symbol: string) {
 
   const trades = useMemo(() => {
     void version;
-    return loadAll()[symbol] ?? [];
+    return loadAllPaperTrades()[symbol] ?? [];
   }, [symbol, version]);
 
   const openPosition = useMemo(() => {
@@ -58,7 +58,7 @@ export function usePaperTrades(symbol: string) {
   const push = useCallback(
     (side: "buy" | "sell", price: number, qty: number) => {
       if (!(price > 0 && qty > 0)) return;
-      const all = loadAll();
+      const all = loadAllPaperTrades();
       const list = all[symbol] ?? [];
       const row: PaperTrade = {
         id: `${Date.now()}-${side}`,

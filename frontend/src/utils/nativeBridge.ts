@@ -35,3 +35,23 @@ export async function focusMainChart(symbol?: string): Promise<void> {
     /* ignore */
   }
 }
+
+export async function updateTrayQuotes(tooltip: string): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("update_tray_tooltip", { tooltip });
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function openSignalsWindow(): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("open_signals_window");
+  } catch {
+    /* ignore */
+  }
+}

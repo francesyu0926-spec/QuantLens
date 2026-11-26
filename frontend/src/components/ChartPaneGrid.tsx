@@ -17,6 +17,7 @@ import { INTERVALS } from "../types/chart";
 import type { PriceLineDef } from "../hooks/usePriceLines";
 import type { PriceColors } from "../utils/priceColors";
 import type { PaperTrade } from "../hooks/usePaperTrades";
+import type { JournalEntry } from "../hooks/useTradingJournal";
 import { usePaneKlines } from "../hooks/usePaneKlines";
 import { snapCrosshairTime } from "../utils/crosshairSync";
 import type { SeriesMarker, Time } from "lightweight-charts";
@@ -36,6 +37,7 @@ interface Props {
   priceLines: PriceLineDef[];
   priceColors: PriceColors;
   paperTrades: PaperTrade[];
+  journalEntries?: JournalEntry[];
   openEntry: number | null;
   livePrice: number;
   onAddPriceLine: (price: number) => void;
@@ -57,6 +59,7 @@ interface Props {
   paneReloadToken?: number;
   /** 主图展示的是缓存/延迟数据（全局异常时边框变警告色） */
   primaryStale?: boolean;
+  noviceMode?: boolean;
 }
 
 export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function ChartPaneGrid({
@@ -69,6 +72,7 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
   priceLines,
   priceColors,
   paperTrades,
+  journalEntries = [],
   openEntry,
   livePrice,
   onAddPriceLine,
@@ -86,6 +90,7 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
   globalErrorBanner = false,
   paneReloadToken = 0,
   primaryStale = false,
+  noviceMode = false,
 }, ref) {
   const globalMarketFault =
     Boolean(marketBlockReason) && (marketBlocked || globalErrorBanner);
@@ -99,7 +104,22 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
   }, [layout, primaryInterval, dualIv, quadIvs]);
 
   const multivPane = layout !== "single";
-  const hideSubChart = multivPane;
+  const hideSubChart = multivPane || noviceMode;
+
+  const paneOptions = useMemo(
+    () =>
+      noviceMode
+        ? {
+            ...options,
+            showEma: false,
+            showBoll: false,
+            showVolumeProfile: false,
+            showVolume: true,
+            intradayAvg: false,
+          }
+        : options,
+    [options, noviceMode]
+  );
 
   const pane1 = usePaneKlines(
     symbol,
@@ -170,11 +190,12 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
             symbol={symbol}
             candles={primaryCandles}
             signals={signals}
-            options={options}
+            options={paneOptions}
             priceLines={priceLines}
             priceColors={priceColors}
             onAddPriceLine={onAddPriceLine}
             paperTrades={paperTrades}
+            journalEntries={journalEntries}
             positionCostLine={
               openEntry != null
                 ? {
@@ -303,7 +324,7 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
                 symbol={symbol}
                 candles={candles}
                 signals={idx === 0 ? signals : []}
-                options={options}
+                options={paneOptions}
                 priceLines={idx === 0 ? priceLines : []}
                 priceColors={priceColors}
                 onAddPriceLine={idx === 0 ? onAddPriceLine : undefined}
@@ -314,6 +335,7 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
                 peerCrosshairTime={peerTime}
                 onCrosshairTime={onCrosshair}
                 paperTrades={idx === 0 ? paperTrades : []}
+                journalEntries={idx === 0 ? journalEntries : []}
                 positionCostLine={
                   idx === 0 && openEntry != null
                     ? { price: openEntry, title: positionTitle || "持仓成本" }
