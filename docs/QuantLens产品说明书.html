@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc 3.11" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>QuantLens 产品说明书</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: 1.5em;}
+    div.column{flex: auto;}
+    @media screen {
+    div.columns{gap: min(4vw, 1.5em);}
+    div.column{overflow-x: auto;}
+    }
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    /* CSS for syntax highlighting */
+    html { -webkit-text-size-adjust: 100%; }
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <link rel="stylesheet" href="pdf-print.css" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">QuantLens 产品说明书</h1>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#quantlens-产品说明书"
+id="toc-quantlens-产品说明书">QuantLens 产品说明书</a>
+<ul>
+<li><a href="#目录" id="toc-目录">目录</a></li>
+<li><a href="#产品概述" id="toc-产品概述">1. 产品概述</a></li>
+<li><a href="#系统架构" id="toc-系统架构">2. 系统架构</a></li>
+<li><a href="#运行环境与启动" id="toc-运行环境与启动">3.
+运行环境与启动</a></li>
+<li><a href="#界面总览" id="toc-界面总览">4. 界面总览</a></li>
+<li><a href="#功能说明" id="toc-功能说明">5. 功能说明</a></li>
+<li><a href="#快捷键与交互" id="toc-快捷键与交互">6.
+快捷键与交互</a></li>
+<li><a href="#后端-api-一览" id="toc-后端-api-一览">7. 后端 API
+一览</a></li>
+<li><a href="#数据与持久化" id="toc-数据与持久化">8.
+数据与持久化</a></li>
+<li><a href="#行情指标与策略引擎" id="toc-行情指标与策略引擎">9.
+行情、指标与策略引擎</a></li>
+<li><a href="#桌面端tauri能力" id="toc-桌面端tauri能力">10.
+桌面端（Tauri）能力</a></li>
+<li><a href="#异常与故障处理" id="toc-异常与故障处理">11.
+异常与故障处理</a></li>
+<li><a href="#术语表" id="toc-术语表">12. 术语表</a></li>
+<li><a href="#路线图与未实现项" id="toc-路线图与未实现项">13.
+路线图与未实现项</a></li>
+<li><a href="#附录主要代码模块" id="toc-附录主要代码模块">14.
+附录：主要代码模块</a></li>
+<li><a href="#版本与仓库" id="toc-版本与仓库">版本与仓库</a></li>
+</ul></li>
+</ul>
+</nav>
+<h1 id="quantlens-产品说明书">QuantLens 产品说明书</h1>
+<p><strong>文档版本</strong>：1.1<br />
+<strong>产品版本</strong>：0.1.x（分支
+<code>cursor/focus-mode-toolbar-signals</code>）<br />
+<strong>最后更新</strong>：2026-11-27<br />
+<strong>产品定位</strong>：轻量级 A
+股取向实时行情监控、技术指标分析、模拟交易与复盘终端<br />
+<strong>交付形态</strong>：浏览器（Vite）/ Tauri 桌面 + Python FastAPI
+行情与计算引擎</p>
+<hr />
+<h2 id="目录">目录</h2>
+<ol type="1">
+<li><a href="#1-产品概述">产品概述</a><br />
+</li>
+<li><a href="#2-系统架构">系统架构</a><br />
+</li>
+<li><a href="#3-运行环境与启动">运行环境与启动</a><br />
+</li>
+<li><a href="#4-界面总览">界面总览</a><br />
+</li>
+<li><a href="#5-功能说明">功能说明</a>（含 5.11 小白模式）<br />
+</li>
+<li><a href="#6-快捷键与交互">快捷键与交互</a><br />
+</li>
+<li><a href="#7-后端-api-一览">后端 API 一览</a><br />
+</li>
+<li><a href="#8-数据与持久化">数据与持久化</a><br />
+</li>
+<li><a href="#9-行情指标与策略引擎">行情、指标与策略引擎</a><br />
+</li>
+<li><a href="#10-桌面端tauri能力">桌面端（Tauri）能力</a><br />
+</li>
+<li><a href="#11-异常与故障处理">异常与故障处理</a><br />
+</li>
+<li><a href="#12-术语表">术语表</a><br />
+</li>
+<li><a href="#13-路线图与未实现项">路线图与未实现项</a><br />
+</li>
+<li><a href="#14-附录主要代码模块">附录：主要代码模块</a></li>
+</ol>
+<hr />
+<h2 id="产品概述">1. 产品概述</h2>
+<p>QuantLens
+面向个人投资者与量化爱好者，在<strong>单机本地</strong>环境提供：</p>
+<table>
+<colgroup>
+<col style="width: 57%" />
+<col style="width: 42%" />
+</colgroup>
+<thead>
+<tr>
+<th>能力域</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>行情与图表</td>
+<td>WebSocket 推流 + REST 快照；Lightweight Charts K
+线；多周期单/双/四图</td>
+</tr>
+<tr>
+<td>技术指标</td>
+<td>EMA、布林带、成交量、VP、MACD/RSI 副图</td>
+</tr>
+<tr>
+<td>策略信号</td>
+<td>后端规则扫描 + 前端自选回填；声音/Webhook/系统通知</td>
+</tr>
+<tr>
+<td>研究与 AI</td>
+<td>多周期共振雷达、结构化 AI 研报、智能解读（白话 Tooltip）</td>
+</tr>
+<tr>
+<td>模拟与复盘</td>
+<td>纸面交易、止损风控测算、EMA 简易回测、复盘笔记</td>
+</tr>
+<tr>
+<td>基本面增强</td>
+<td>PE/PB/行业/市值、主力净流入（A 股）</td>
+</tr>
+<tr>
+<td>数据资产</td>
+<td>本地 SQLite（K 线缓存 + 用户数据）；JSON/CSV 导出与跨端同步</td>
+</tr>
+<tr>
+<td>小白模式</td>
+<td>白话看盘、单图专注、标记价位、模拟练习、条件选股简化 UI</td>
+</tr>
+<tr>
+<td>行情增强</td>
+<td>大盘脉搏条、板块同业弹窗、条件选股（universe + 指标扫描）</td>
+</tr>
+</tbody>
+</table>
+<p>默认构建为 <strong>A
+股专用模式</strong>（<code>A_SHARE_ONLY</code>）：红涨绿跌、6
+位代码、交易时段校验。后端可通过配置扩展加密货币（CCXT）、美股（yfinance），见
+<code>README.md</code>。</p>
+<hr />
+<h2 id="系统架构">2. 系统架构</h2>
+<pre><code>┌─────────────────────┐       WebSocket / REST        ┌──────────────────────────┐
+│  React 终端 UI      │ ◄────────────────────────────► │  FastAPI 网关 (8765)      │
+│  Vite :1420         │                                │  /ws · /klines · /sync    │
+└──────────▲──────────┘                                └────────────┬─────────────┘
+           │ Tauri WebView (可选)                                    │
+┌──────────┴──────────┐                                             ▼
+│  Tauri (Rust)       │                               ┌──────────────────────────┐
+│  托盘 · 全局快捷键   │ ◄── sidecar ──► (可选)        │  MarketCollector         │
+│  迷你看盘 · 通知     │                               │  指标 · 规则 · SQLite    │
+└─────────────────────┘                               └──────────────────────────┘</code></pre>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>层级</th>
+<th>技术</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>展示层</td>
+<td>React 18 + TypeScript + Vite</td>
+<td>布局、图表、自选、设置、状态机</td>
+</tr>
+<tr>
+<td>图表</td>
+<td>Lightweight Charts</td>
+<td>K 线、指标叠层、十字光标、标记</td>
+</tr>
+<tr>
+<td>引擎层</td>
+<td>FastAPI + asyncio</td>
+<td>WS 广播、K 线聚合、指标计算、信号扫描</td>
+</tr>
+<tr>
+<td>数据源</td>
+<td>AKShare / CCXT / yfinance</td>
+<td>按标的类型选路</td>
+</tr>
+<tr>
+<td>持久化</td>
+<td>SQLite <code>quantlens.db</code></td>
+<td>K 线缓存、<code>user_data</code> JSON 键值</td>
+</tr>
+<tr>
+<td>桌面</td>
+<td>Tauri 2 + plugins</td>
+<td>托盘、Alt+Q、通知、迷你窗</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="运行环境与启动">3. 运行环境与启动</h2>
+<h3 id="环境要求">3.1 环境要求</h3>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>要求</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Node.js</td>
+<td>18+（<code>frontend</code>）</td>
+</tr>
+<tr>
+<td>Python</td>
+<td>3.11+（<code>backend</code>）</td>
+</tr>
+<tr>
+<td>Rust</td>
+<td>仅 Tauri 桌面打包时需要</td>
+</tr>
+</tbody>
+</table>
+<h3 id="启动步骤web-开发">3.2 启动步骤（Web 开发）</h3>
+<p><strong>终端 1 — 引擎</strong></p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cd</span> backend</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>python <span class="op">-</span>m venv <span class="op">.</span><span class="fu">venv</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="op">.</span>\<span class="op">.</span><span class="fu">venv</span>\Scripts\Activate<span class="op">.</span><span class="fu">ps1</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>pip install <span class="op">-</span>r requirements<span class="op">.</span><span class="fu">txt</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>python run<span class="op">.</span><span class="fu">py</span></span></code></pre></div>
+<p>默认监听 <strong>http://127.0.0.1:8765</strong>。</p>
+<p><strong>终端 2 — 前端</strong></p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cd</span> frontend</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">copy</span> <span class="op">.</span><span class="fu">env</span><span class="op">.</span><span class="fu">example</span> <span class="op">.</span><span class="fu">env</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>npm install</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>npm run dev</span></code></pre></div>
+<p>默认 <strong>http://localhost:1420</strong>。<br />
+环境变量：<code>VITE_API_URL</code>、<code>VITE_WS_URL</code>（可选，指向引擎地址）。</p>
+<p><strong>可选脚本</strong>：<code>scripts/dev-backend.ps1</code>、<code>scripts/dev-frontend.ps1</code>。</p>
+<h3 id="桌面端">3.3 桌面端</h3>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cd</span> frontend</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>npm run tauri dev</span></code></pre></div>
+<p>关闭主窗口时<strong>最小化到托盘</strong>（非退出）。可在
+<code>src-tauri/binaries/</code> 放置 sidecar 引擎以开机拉起
+Python。</p>
+<hr />
+<h2 id="界面总览">4. 界面总览</h2>
+<h3 id="三区布局">4.1 三区布局</h3>
+<pre><code>┌────────────────────────────────────────────────────────────────────┐
+│ 顶栏 TopStatusBar                                                   │
+│ [品牌锚点 QuantLens + 连接点] │ 标的/报价/基本面 │ 分屏·解读·诊断·设置 │
+├──────────┬─────────────────────────────────────────┬───────────────┤
+│ 左栏     │  图表主区                                │ 右栏 RightDock │
+│ 自选     │  全局错误条 → 工具栏 → 盘面简报/MTF雷达    │ 多空体检       │
+│ 搜索选股 │  → K 线（单/双/四图）                    │ 信号|持仓|回测  │
+│ 指数条   │                                          │ |笔记|盘口*    │
+│ 情绪条   │                                          │               │
+└──────────┴─────────────────────────────────────────┴───────────────┘</code></pre>
+<p>* 盘口标签仅在 <strong>非 A 股独占</strong>
+模式下显示（<code>A_SHARE_ONLY=false</code>）。</p>
+<h3 id="布局参数">4.2 布局参数</h3>
+<table>
+<thead>
+<tr>
+<th>区域</th>
+<th>约宽</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>左栏</td>
+<td>236px</td>
+<td>可收起，留下窄轨展开按钮</td>
+</tr>
+<tr>
+<td>右栏</td>
+<td>280px</td>
+<td>可收起</td>
+</tr>
+<tr>
+<td>中间</td>
+<td><code>flex</code> 自适应</td>
+<td><code>min-height: 0</code> 保证图表有高度</td>
+</tr>
+</tbody>
+</table>
+<p><strong>专注模式</strong>：快捷键 <strong>F</strong>
+同时切换左右栏开合；进入<strong>四图</strong>时自动收起两侧以扩大图表区。</p>
+<h3 id="顶栏信息架构2026-11-改版">4.3 顶栏信息架构（2026-11 改版）</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>分区</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>左锚点</td>
+<td>品牌字标
+<strong>QuantLens</strong>；<strong>唯一连接状态圆点</strong>（悬停说明同步/重连）</td>
+</tr>
+<tr>
+<td>中部</td>
+<td>中文名、代码（如
+<code>600519.SH</code>）、<strong>当前激活图</strong>周期、交易时段纯文字（「交易中」/「已休市
+· 盘后」）</td>
+</tr>
+<tr>
+<td>报价区</td>
+<td>大字现价、涨跌额与涨跌幅；基本面徽章；主力净流入（A 股）</td>
+</tr>
+<tr>
+<td>右侧</td>
+<td>单/双/四图切换、智能解读、AI 诊断、迷你窗（Tauri）、预警设置 ⚙</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>交易时段<strong>不再使用第二个圆点</strong>，避免与连接状态混淆。</p>
+</blockquote>
+<hr />
+<h2 id="功能说明">5. 功能说明</h2>
+<h3 id="连接状态connectionstatuscapsule">5.1
+连接状态（ConnectionStatusCapsule）</h3>
+<p>表示<strong>传输层与轮询链路</strong>，不等同于「单只标的 K
+线一定成功」。</p>
+<table>
+<colgroup>
+<col style="width: 26%" />
+<col style="width: 47%" />
+<col style="width: 26%" />
+</colgroup>
+<thead>
+<tr>
+<th>状态</th>
+<th>圆点/文案</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>盘中 + 已连接</td>
+<td>亮绿（品牌旁）</td>
+<td>数据连接正常，按间隔同步（A 股约 5s）</td>
+</tr>
+<tr>
+<td>收盘 + 仍在线</td>
+<td>半透明绿</td>
+<td>链路正常，盘中行情已结束，快照轮询</td>
+</tr>
+<tr>
+<td>休市/未连接</td>
+<td>灰</td>
+<td>日历休市或 WS 未连接</td>
+</tr>
+<tr>
+<td>连接中/重连</td>
+<td>琥珀闪烁</td>
+<td>建立或恢复连接</td>
+</tr>
+<tr>
+<td>失败</td>
+<td>红，可点击</td>
+<td>触发 <code>onReconnect</code></td>
+</tr>
+</tbody>
+</table>
+<p>悬停 <strong>friendly</strong> 文案示例：</p>
+<ul>
+<li>盘中：<code>数据连接正常，每 5s 同步</code></li>
+<li>盘后在线：<code>连接正常 · 已收盘 · 每 5s 快照</code></li>
+<li>连接正常但当前标的拉取失败：<code>连接正常 · 当前标的行情暂不可用</code></li>
+</ul>
+<p>交易时段由
+<code>isAShareSessionOpen()</code>（Asia/Shanghai，周一至周五
+9:30–11:30、13:00–15:00）决定顶栏文字，与连接点独立。</p>
+<hr />
+<h3 id="图表工具栏charttoolbar">5.2 图表工具栏（ChartToolbar）</h3>
+<p><strong>周期</strong>：<code>1m</code> <code>5m</code>
+<code>15m</code> <code>1h</code> <code>4h</code> <code>1d</code> —
+作用于<strong>当前激活分屏格</strong>（多图时须先点选子图）。</p>
+<p><strong>主图开关</strong>：EMA · BOLL · VOL ·
+VP（量价分布，可选）</p>
+<p><strong>副图</strong>（单图）：MACD 或 RSI
+二选一；双图/四图默认隐藏副图以省高。</p>
+<p><strong>画线 / 标记价位</strong></p>
+<ul>
+<li><strong>专业版</strong>：「画线工具 ▾」下拉；<strong>Alt +
+点击</strong>主图添加水平线；现价 / ±2%
+止损止盈快捷项；触及价位可提醒（🔔）</li>
+<li><strong>小白版</strong>：「标记价位
+▾」；下拉内可<strong>开启点图标记</strong>（单击主图即可画线，<strong>Esc</strong>
+退出）；工具栏下方 <strong>已标记</strong>
+芯片条支持单条删除与<strong>全部清除</strong>；与专业版共用
+<code>quantlens.priceLines.{symbol}</code> 存储</li>
+<li>自动支撑/阻力、模拟练习止损止盈线为系统生成，<strong>不能</strong>在画线菜单里删除</li>
+</ul>
+<p><strong>智能解读 / 小白版</strong>：指标 Chip
+悬停显示白话说明；小白版固定单图并隐藏 EMA/BOLL/VP
+等专业开关，保留成交量（显示为「买卖活跃度」）。</p>
+<hr />
+<h3 id="k-线与分屏chartworkspace-chartpanegrid">5.3 K
+线与分屏（ChartWorkspace / ChartPaneGrid）</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>模式</th>
+<th>行为</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>单图</td>
+<td>主 WS 品种；完整副图；完整 OHLC 图例</td>
+</tr>
+<tr>
+<td>双图</td>
+<td>主周期 + 副周期；角标可改副图周期</td>
+</tr>
+<tr>
+<td>四图</td>
+<td>默认
+<code>1m/15m/1h/1d</code>；每格角标独立换周期；<strong>激活格</strong>右上角小圆点（非粗青框）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>交互</strong></p>
+<ul>
+<li>十字光标：单图显示 O/H/L/C、EMA；多图
+<strong>跨周期时间联动</strong>（对齐最近 K 线时间）</li>
+<li><strong>Alt + 点击</strong>：添加水平价位线</li>
+<li>金叉/死叉箭头标记（悬停显示详情）</li>
+<li>AI 诊断/形态识别可注入支撑阻力参考线</li>
+</ul>
+<p><strong>紧凑图例（多图）</strong>：仅收 C + 涨跌幅；EMA 以色点 +
+Tooltip；关闭 LWC 轴上多余标签，避免与图例重叠。</p>
+<p><strong>加载与错误</strong></p>
+<ul>
+<li>图表区顶部
+<strong>全局错误条</strong>：行情拉取超时；「重新加载」触发
+<code>market.retry()</code> 并递增 <code>paneReloadToken</code>
+重拉各辅助周期</li>
+<li>全局错误展示时，子格<strong>不显示单独重试</strong>，统一文案「数据源超时」</li>
+<li>窗格状态：网格底 + 加载环 / 失败 HUD（无灰卡片块）</li>
+</ul>
+<hr />
+<h3 id="盘面辅助条">5.4 盘面辅助条</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>组件</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>MarketBriefBanner</strong></td>
+<td>基于当前 K 线的规则化白话简报（多/空/震荡语气）</td>
+</tr>
+<tr>
+<td><strong>MultiTimeframeRadar</strong></td>
+<td>调用 <code>/radar</code>；展示多周期共振标题与
+<code>5m/15m/1h/1d</code> 胶囊；点击切换主图周期</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="左栏自选watchlist">5.5 左栏自选（Watchlist）</h3>
+<ul>
+<li><strong>A 股自选</strong>分组、迷你 sparkline、现价、涨跌幅</li>
+<li><strong>搜索</strong>：代码/名称，<code>/catalog/search</code>
+全市场检索并加入自选</li>
+<li><strong>条件选股 ⛃</strong>：卡片式预设、自选/全市场切换、参数
+Chips；小白版白话文案（<code>ScreenerModal</code> +
+<code>GET /screener/universe</code> 等后端接口）</li>
+<li><strong>大盘脉搏</strong>（<code>MarketPulseBar</code>）：顶栏下简称览涨跌分布等脉冲信息</li>
+<li><strong>行业同业</strong>：顶栏基本面区点击行业 →
+<code>SectorPeersModal</code>（<code>GET /sector/peers</code>）</li>
+<li><strong>大盘指数条</strong>：上证50、沪深300、创业板等快捷切换</li>
+<li><strong>市场温度条</strong>：基于自选涨跌家数的简易情绪</li>
+<li>侧栏
+<strong>SidebarBrandStrip</strong>：收起时仅保留展开控件，品牌归属顶栏</li>
+</ul>
+<p>交易时段外部分报价为「—」；盘中显示报价刷新逻辑。</p>
+<hr />
+<h3 id="右栏rightdock">5.6 右栏（RightDock）</h3>
+<p>顶部常驻
+<strong>MarketHealthCard</strong>（多空体检）：折叠评分条，展开分项进度与关键位
+Chips；小白版为<strong>交通灯式强弱</strong>与一句话总结。</p>
+<p><strong>Tab 页签（专业版）</strong></p>
+<table>
+<colgroup>
+<col style="width: 45%" />
+<col style="width: 54%" />
+</colgroup>
+<thead>
+<tr>
+<th>Tab</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>信号</td>
+<td>SignalLog：范围「当前标的」|「自选」；白话模式下标题为「提醒记录」</td>
+</tr>
+<tr>
+<td>持仓</td>
+<td>模拟开仓：入场/止损、资金与股数、仓位比例、买卖；止损风控卡</td>
+</tr>
+<tr>
+<td>回测</td>
+<td>BacktestPanel：多策略模板、参数滑条、净值对比、自选批量榜</td>
+</tr>
+<tr>
+<td>笔记</td>
+<td>TradingJournalPanel：开仓/平仓/观察标签，复盘正文；K
+线可显示笔记标记</td>
+</tr>
+<tr>
+<td>盘口</td>
+<td>仅多市场模式：<code>/depth</code> 买卖档</td>
+</tr>
+</tbody>
+</table>
+<p><strong>小白版右栏</strong>仅保留 <strong>练习</strong>（模拟持仓）与
+<strong>笔记</strong>；含新手引导
+<code>NoviceOnboardingTour</code>。</p>
+<p><strong>模拟练习（小白）</strong></p>
+<ul>
+<li>滑块设定「最多愿意亏」金额 →
+自动估算股数、止损价、盈亏比；练习买入可在主图叠加止损/止盈参考线（<code>onNovicePracticePreview</code>）</li>
+<li>专业版仍可使用完整资金、止损 Chips、仓位比例等字段</li>
+</ul>
+<hr />
+<h3 id="小白模式novice-assist">5.11 小白模式（Novice Assist）</h3>
+<table>
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 60%" />
+</colgroup>
+<thead>
+<tr>
+<th>项</th>
+<th>行为</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>开关</td>
+<td>顶栏 <strong>专业 / 小白版</strong>；状态持久化
+<code>quantlens-novice-assist</code></td>
+</tr>
+<tr>
+<td>布局</td>
+<td>强制<strong>单图</strong>；隐藏多周期雷达与专业副图指标</td>
+</tr>
+<tr>
+<td>盘面</td>
+<td><code>MarketBriefBanner</code> 白话多空与追高提示</td>
+</tr>
+<tr>
+<td>设置</td>
+<td>预警项、通知项改为白话标签；规则列表单列排版</td>
+</tr>
+<tr>
+<td>剪贴板</td>
+<td>检测到 6 位 A 股代码可 Toast
+询问是否加入自选（<code>ClipboardSymbolToast</code>）</td>
+</tr>
+<tr>
+<td>独立信号窗</td>
+<td>Tauri 下可分离信号列表窗口（<code>SignalsDetachedShell</code>）</td>
+</tr>
+<tr>
+<td>摸鱼</td>
+<td><strong>Alt+B</strong> 界面伪装（<code>camouflage</code>）</td>
+</tr>
+</tbody>
+</table>
+<p>首次开启可走 <strong>Onboarding</strong> 引导：自选 → 练习 →
+标记价位。</p>
+<hr />
+<h3 id="ai-结构化研报aidiagnosemodal">5.7 AI
+结构化研报（AiDiagnoseModal）</h3>
+<ul>
+<li>宽幅卡片：局势评分、关键点位、多周期共振、观察剧本</li>
+<li><strong>一键画入主图</strong>：支撑/阻力水平线</li>
+<li>复制全文、关闭；数据来自 <code>/radar</code> + 本地 K
+线结构分析</li>
+<li>备用文字诊断：<code>GET /diagnose</code></li>
+</ul>
+<hr />
+<h3 id="系统设置alertsettings">5.8 系统设置（AlertSettings）</h3>
+<p><strong>外观</strong>：涨跌配色 — 胶囊分段（自选 / 红涨绿跌 /
+绿涨红跌）</p>
+<p><strong>策略预警 /
+涨跌提醒</strong>：EMA、RSI、布林等；小白白话标题</p>
+<p><strong>数据备份</strong>：幽灵按钮 — 导出全部
+JSON、从备份恢复、导出模拟成交/复盘笔记 CSV；说明 SQLite
+路径供手动备份</p>
+<p><strong>通知</strong>：提示音、桌面通知（Tauri）、Webhook URL +
+测试、可选触发时模拟买入 100 股</p>
+<p><strong>同步</strong>：启动时 <code>bootstrapUserDataSync()</code>
+拉取/推送；画线键以时间戳合并；清除画线后写回服务端避免久未登录又被旧数据覆盖</p>
+<p><strong>样式</strong>：基础在 <code>global.css</code>，增量在
+<code>overrides.css</code>（设置弹窗、标记价位菜单、练习滑块等）</p>
+<hr />
+<h3 id="预警与信号链路">5.9 预警与信号链路</h3>
+<ol type="1">
+<li>后端 WS 推送 K 线 + <code>scan_signals</code> 结果<br />
+</li>
+<li>前端 <code>useAlertRules</code> 过滤已启用规则<br />
+</li>
+<li>触发：声音、<code>relayWebhook</code>、Tauri
+<code>notify_signal</code><br />
+</li>
+<li>自选 scope：watchlist 标的并行拉 K 线并
+<code>backfillEmaSignals</code> 历史信号</li>
+</ol>
+<hr />
+<h3 id="基本面与资金顶栏">5.10 基本面与资金（顶栏）</h3>
+<ul>
+<li><code>GET /fundamentals</code>：行业、市值、PE/PB（AKShare）</li>
+<li><code>GET /capital_flow</code>：主力净流入</li>
+<li><strong>FundamentalBadges</strong>
+微标展示；加载中提示「基本面加载中…」</li>
+</ul>
+<hr />
+<h2 id="快捷键与交互">6. 快捷键与交互</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>按键</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>F</strong></td>
+<td>专注模式（左右侧栏同时开合）</td>
+</tr>
+<tr>
+<td><strong>1–6</strong></td>
+<td>切换当前激活图周期（对应工具栏 1m…1d）</td>
+</tr>
+<tr>
+<td><strong>↑ / ↓</strong></td>
+<td>自选列表上/下切换标的</td>
+</tr>
+<tr>
+<td><strong>Esc</strong></td>
+<td>关闭设置、研报等弹窗</td>
+</tr>
+<tr>
+<td><strong>Alt + 点击图表</strong></td>
+<td>添加水平价位线（专业版；小白版需先开「点图标记」）</td>
+</tr>
+<tr>
+<td><strong>Esc</strong></td>
+<td>退出小白「点图标记」模式</td>
+</tr>
+<tr>
+<td><strong>Alt+Q</strong>（仅 Tauri）</td>
+<td>显示/隐藏主窗口</td>
+</tr>
+<tr>
+<td><strong>Alt+B</strong></td>
+<td>界面伪装（摸鱼）</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="后端-api-一览">7. 后端 API 一览</h2>
+<p>基础 URL：<code>http://127.0.0.1:8765</code>（可配置）</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>路径</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/health</code></td>
+<td>健康检查；<code>market</code> 模式</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/klines?symbol=&amp;interval=</code></td>
+<td>REST K 线快照 + 指标</td>
+</tr>
+<tr>
+<td>WS</td>
+<td><code>/ws?symbol=&amp;interval=</code></td>
+<td>实时推送（K 线、价、信号）</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/quotes?symbols=</code></td>
+<td>批量报价（自选，最多 250 码）</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/catalog/search?q=&amp;limit=</code></td>
+<td>标的搜索</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/radar?symbol=</code></td>
+<td>多周期共振帧</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/diagnose?symbol=&amp;interval=</code></td>
+<td>文字诊断</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/depth?symbol=&amp;levels=</code></td>
+<td>盘口深度（加密等）</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/fundamentals?symbol=</code></td>
+<td>基本面</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/capital_flow?symbol=</code></td>
+<td>资金流向</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/webhook/relay</code></td>
+<td>Webhook 代理 POST</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/sync</code></td>
+<td>拉取可同步用户数据键</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/sync/{key}</code></td>
+<td>写入单键</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/sync/bulk</code></td>
+<td>批量写入</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/sync/item/{key}</code></td>
+<td>读取单键</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/export/trades.csv</code></td>
+<td>模拟成交 CSV</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/export/journal.csv</code></td>
+<td>复盘笔记 CSV</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/market/pulse</code></td>
+<td>大盘脉搏 / 涨跌分布</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/sector/peers</code></td>
+<td>同业标的列表</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/screener/universe</code></td>
+<td>条件选股标的池</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/screener/status</code></td>
+<td>选股任务状态</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/screener/rebuild</code></td>
+<td>重建 universe 指标缓存</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="数据与持久化">8. 数据与持久化</h2>
+<h3 id="服务端-sqlitebackenddataquantlens.db">8.1 服务端
+SQLite（<code>backend/data/quantlens.db</code>）</h3>
+<table>
+<thead>
+<tr>
+<th>用途</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>K 线缓存</td>
+<td>采集器写入，降低重复拉取</td>
+</tr>
+<tr>
+<td><code>user_data</code></td>
+<td>JSON 文档键值，支持同步键见下表</td>
+</tr>
+</tbody>
+</table>
+<p><strong>可同步键（<code>SYNC_KEYS</code>）</strong></p>
+<table>
+<thead>
+<tr>
+<th>键名</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>quantlens.watchlist.extra</code></td>
+<td>自选扩展</td>
+</tr>
+<tr>
+<td><code>quantlens-paper-trades</code></td>
+<td>模拟成交</td>
+</tr>
+<tr>
+<td><code>quantlens-trading-journal</code></td>
+<td>复盘笔记</td>
+</tr>
+<tr>
+<td><code>quantlens-alert-rules</code></td>
+<td>预警规则</td>
+</tr>
+<tr>
+<td><code>quantlens-price-color-mode</code></td>
+<td>涨跌配色</td>
+</tr>
+<tr>
+<td><code>quantlens-novice-assist</code></td>
+<td>智能解读开关</td>
+</tr>
+<tr>
+<td><code>quantlens.priceLines.{symbol}</code></td>
+<td>各标的画线（前缀匹配）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="浏览器-localstorage">8.2 浏览器 localStorage</h3>
+<p>与上表键<strong>双写</strong>；离线仍以 localStorage 为准，联网后与
+<code>/sync</code> 合并。</p>
+<h3 id="其他本地状态">8.3 其他本地状态</h3>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>存储</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>上次浏览标的</td>
+<td><code>quantlens.lastSymbol</code></td>
+</tr>
+<tr>
+<td>图表周期 / 布局</td>
+<td>React 状态 + 部分持久化钩子</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="行情指标与策略引擎">9. 行情、指标与策略引擎</h2>
+<h3 id="数据源路由">9.1 数据源路由</h3>
+<table>
+<thead>
+<tr>
+<th>标的示例</th>
+<th>数据源</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>600519</code>、<code>510300</code></td>
+<td>AKShare（东财分钟线；ETF 受限时新浪回退）</td>
+</tr>
+<tr>
+<td><code>BTC/USDT</code></td>
+<td>CCXT（默认 KuCoin，可环境变量切换）</td>
+</tr>
+<tr>
+<td><code>AAPL</code></td>
+<td>yfinance</td>
+</tr>
+</tbody>
+</table>
+<h3 id="指标indicators.py">9.2 指标（<code>indicators.py</code>）</h3>
+<p>EMA、RSI(14)、MACD、布林带、ATR 等；前端按开关叠绘。</p>
+<h3 id="策略规则rules.py">9.3 策略规则（<code>rules.py</code>）</h3>
+<p>与设置开关对齐：RSI 超卖/超买、布林轨突破、EMA 金叉死叉。</p>
+<h3 id="回测前端-backtestengine.ts-backtestpanel">9.4 回测（前端
+<code>backtestEngine.ts</code> / <code>BacktestPanel</code>）</h3>
+<p>对当前标的、当前 K 线序列执行 EMA
+交叉简易回测，输出收益、胜率、回撤、权益曲线等（非 tick
+级机构回测）。</p>
+<hr />
+<h2 id="桌面端tauri能力">10. 桌面端（Tauri）能力</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>能力</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>关闭 → 托盘</td>
+<td>主窗 <code>CloseRequested</code> 拦截为隐藏</td>
+</tr>
+<tr>
+<td>托盘菜单</td>
+<td>显示主窗口、迷你看盘、退出</td>
+</tr>
+<tr>
+<td><strong>Alt+Q</strong></td>
+<td>全局显示/隐藏主窗口</td>
+</tr>
+<tr>
+<td>系统通知</td>
+<td>策略信号 <code>notify_signal</code></td>
+</tr>
+<tr>
+<td>迷你看盘</td>
+<td>独立 WebView
+<code>?mode=mini</code>；顶栏「迷你」；点击回主窗并聚焦标的</td>
+</tr>
+<tr>
+<td>Sidecar</td>
+<td>可自动 spawn <code>quantlens-engine</code> 二进制</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="异常与故障处理">11. 异常与故障处理</h2>
+<table>
+<colgroup>
+<col style="width: 27%" />
+<col style="width: 72%" />
+</colgroup>
+<thead>
+<tr>
+<th>现象</th>
+<th>原因 / 处理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>页面布局塌陷、K 线区无限变长</td>
+<td><strong>勿截断 <code>global.css</code></strong>；从 Git 恢复；确认
+<code>overrides.css</code> 已加载；<code>chart-stack</code> 使用
+<code>min-height:0</code>；强刷</td>
+</tr>
+<tr>
+<td>标记删不掉又出现</td>
+<td>久未登录后 <code>/sync</code> 拉回旧画线 →
+用「全部清除」后写回；或检查后端 <code>user_data</code></td>
+</tr>
+<tr>
+<td>切换 ETF 超时</td>
+<td>东财限流；等待后点图表区「重新加载」；重启后端</td>
+</tr>
+<tr>
+<td>品牌绿点 vs 文案「已收盘」</td>
+<td>盘后链路仍在线属正常；悬停应见「已收盘」说明</td>
+</tr>
+<tr>
+<td>WebSocket 断开</td>
+<td>点击失败状态重连；确认 <code>python run.py</code> 运行</td>
+</tr>
+<tr>
+<td>四图周期工具栏无效</td>
+<td>先点击要操作的子图（激活小圆点），再改周期</td>
+</tr>
+<tr>
+<td>K 线区空白</td>
+<td>父容器高度为 0 多为样式缺失；检查 <code>.chart-area</code> /
+<code>.layout</code> flex</td>
+</tr>
+<tr>
+<td>预警无 Webhook</td>
+<td>设置开启推送、填写 URL、点「测试」</td>
+</tr>
+<tr>
+<td><code>npm run build</code> 失败</td>
+<td>修复 TypeScript 错误后再打包</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="术语表">12. 术语表</h2>
+<table>
+<thead>
+<tr>
+<th>术语</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>专注模式</td>
+<td>F 键收起左右侧栏</td>
+</tr>
+<tr>
+<td>智能解读</td>
+<td>顶栏开关；指标白话 Tooltip + 盘面简报</td>
+</tr>
+<tr>
+<td>小白模式</td>
+<td>白话 UI、单图、标记价位、模拟练习</td>
+</tr>
+<tr>
+<td>模拟持仓</td>
+<td>本地纸面交易，不连接券商</td>
+</tr>
+<tr>
+<td>信号 scope「自选」</td>
+<td>聚合自选多标的的策略记录</td>
+</tr>
+<tr>
+<td>激活格</td>
+<td>多图模式下当前接收快捷键/周期操作的子图</td>
+</tr>
+<tr>
+<td>paneReloadToken</td>
+<td>顶栏全局重载与各 <code>usePaneKlines</code> 重试联动计数</td>
+</tr>
+<tr>
+<td>chartStale</td>
+<td>切换标的短暂展示缓存 K 线并标注延迟</td>
+</tr>
+<tr>
+<td>MTF 雷达</td>
+<td>MultiTimeframeRadar 多周期共振胶囊</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="路线图与未实现项">13. 路线图与未实现项</h2>
+<p>详见 <code>docs/路线图.md</code> 摘要：</p>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>回测引擎首版</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>基本面 / 资金流向</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>SQLite 用户数据同步</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Tauri 托盘、Alt+Q、迷你窗、通知</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>小白模式、条件选股 UI、标记价位</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>条件选股后端 universe</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>LLM 追问式研报</td>
+<td>⏳</td>
+</tr>
+<tr>
+<td>托盘实时报价列表</td>
+<td>⏳</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="附录主要代码模块">14. 附录：主要代码模块</h2>
+<table>
+<thead>
+<tr>
+<th>路径</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>frontend/src/App.tsx</code></td>
+<td>总编排：行情 WS、分屏、预警、错误条、快捷键</td>
+</tr>
+<tr>
+<td><code>frontend/src/components/TopStatusBar.tsx</code></td>
+<td>顶栏三区</td>
+</tr>
+<tr>
+<td><code>frontend/src/components/ConnectionStatusCapsule.tsx</code></td>
+<td>连接状态</td>
+</tr>
+<tr>
+<td><code>frontend/src/components/ChartPaneGrid.tsx</code></td>
+<td>单/双/四图与窗格状态</td>
+</tr>
+<tr>
+<td><code>frontend/src/components/ChartWorkspace.tsx</code></td>
+<td>LWC 图表与图例</td>
+</tr>
+<tr>
+<td><code>frontend/src/components/Watchlist.tsx</code></td>
+<td>自选与选股</td>
+</tr>
+<tr>
+<td><code>frontend/src/components/RightDock.tsx</code></td>
+<td>右栏 Tab</td>
+</tr>
+<tr>
+<td><code>frontend/src/components/AlertSettings.tsx</code></td>
+<td>系统设置</td>
+</tr>
+<tr>
+<td><code>frontend/src/styles/overrides.css</code></td>
+<td>小白版/设置/画线增量样式</td>
+</tr>
+<tr>
+<td><code>frontend/src/hooks/useNoviceAssist.ts</code></td>
+<td>小白模式状态</td>
+</tr>
+<tr>
+<td><code>frontend/src/components/ScreenerModal.tsx</code></td>
+<td>条件选股</td>
+</tr>
+<tr>
+<td><code>backend/app/screener.py</code></td>
+<td>选股 universe 与扫描</td>
+</tr>
+<tr>
+<td><code>frontend/src/hooks/useMarketWebSocket.ts</code></td>
+<td>WS 状态机</td>
+</tr>
+<tr>
+<td><code>frontend/src/utils/userDataSync.ts</code></td>
+<td>本地与服务端同步</td>
+</tr>
+<tr>
+<td><code>backend/app/main.py</code></td>
+<td>HTTP + WS 入口</td>
+</tr>
+<tr>
+<td><code>backend/app/collector.py</code></td>
+<td>行情采集与缓存</td>
+</tr>
+<tr>
+<td><code>backend/app/rules.py</code></td>
+<td>信号规则</td>
+</tr>
+<tr>
+<td><code>src-tauri/src/lib.rs</code></td>
+<td>桌面原生能力</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="版本与仓库">版本与仓库</h2>
+<ul>
+<li>仓库：<a
+href="https://github.com/francesyu0926-spec/QuantLens">https://github.com/francesyu0926-spec/QuantLens</a><br />
+</li>
+<li>许可证：MIT</li>
+</ul>
+<hr />
+<p><em>本文档依据仓库当前代码整理，随版本迭代可能略有差异。提交问题或功能需求请使用
+GitHub Issues。</em></p>
+</body>
+</html>
