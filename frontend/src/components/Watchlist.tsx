@@ -25,6 +25,7 @@ interface Props {
   screenerActive?: boolean;
   onScreenerResult?: (symbols: string[] | null) => void;
   onCollapsePanel?: () => void;
+  noviceMode?: boolean;
 }
 
 type GroupKey = "crypto" | "us" | "a_share";
@@ -118,6 +119,7 @@ export function Watchlist({
   screenerActive = false,
   onScreenerResult,
   onCollapsePanel,
+  noviceMode = false,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
@@ -277,6 +279,7 @@ export function Watchlist({
         quotes={quotes}
         onClose={() => setScreenerOpen(false)}
         onResult={(syms) => onScreenerResult?.(syms)}
+        noviceMode={noviceMode}
       />
       {quotesLoading && sessionOpen && (
         <p className="quotes-status">实时报价获取中…</p>

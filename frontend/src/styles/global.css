@@ -1,3 +1,10 @@
+/*
+ * QuantLens global.css — 基础样式（~6k 行）
+ * 增量/覆盖请写在 styles/overrides.css（小白版、设置弹窗、画线菜单等）
+ *
+ * 区块：M3 tokens → app/layout → watchlist → chart → dock → modals → 小白/回测…
+ */
+
 :root {
   /* M3 dark surfaces */
   --md-surface: #0b0e14;
@@ -15,6 +22,11 @@
   --md-on-surface: #e6edf3;
   --md-on-surface-variant: #8b949e;
   --md-elev-1: 0 2px 6px rgba(0, 0, 0, 0.28);
+
+  /* 图表区 flex 高度链（与 overrides.css 共用） */
+  --ql-chart-min-main: 160px;
+  --ql-z-toolbar: 60;
+  --ql-z-draw-menu: 200;
 
   font-family: "Segoe UI", system-ui, sans-serif;
   color: var(--md-on-surface);
@@ -1612,12 +1624,17 @@ body.mini-ticker-mode .app-shell {
 .layout {
   display: grid;
   grid-template-columns: var(--panel-left-w) minmax(0, 1fr) var(--panel-right-w);
+  grid-template-rows: minmax(0, 1fr);
   flex: 1;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
   transition: grid-template-columns 0.2s ease;
   background: var(--md-surface-container-low);
+}
+
+.layout > * {
+  min-height: 0;
 }
 
 .layout.collapsed-left {
@@ -1932,16 +1949,19 @@ body.mini-ticker-mode .app-shell {
 
 .chart-stack {
   position: relative;
-  flex: 1;
-  min-height: 260px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .chart-stack-body {
   flex: 1 1 auto;
   min-height: 0;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -2462,7 +2482,14 @@ body.mini-ticker-mode .app-shell {
   overflow: hidden;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   background: var(--md-surface);
+}
+
+.chart-area > .chart-toolbar-unified,
+.chart-area > .novice-marked-lines,
+.chart-area > .market-brief {
+  flex-shrink: 0;
 }
 
 .chart-area:has(.is-quad) {
@@ -2495,7 +2522,9 @@ body.mini-ticker-mode .app-shell {
   justify-content: space-between;
   min-width: 0;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
+  position: relative;
+  z-index: var(--ql-z-toolbar);
 }
 
 .toolbar-leading {
@@ -2665,6 +2694,8 @@ body.mini-ticker-mode .app-shell {
   gap: 0;
   flex: 1;
   min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .chart-legend {
@@ -2845,15 +2876,18 @@ body.mini-ticker-mode .app-shell {
 
 .chart-pane-grid.is-single {
   flex-direction: column;
-  min-height: 280px;
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .chart-pane-grid.is-single > .chart-workspace {
   flex: 1 1 auto;
-  min-height: 260px;
-  height: 100%;
+  min-height: 0;
+  max-height: 100%;
   width: 100%;
+  overflow: hidden;
 }
 
 .chart-pane-grid.is-dual,
@@ -4027,14 +4061,16 @@ body.mini-ticker-mode .app-shell {
   position: relative;
   width: 100%;
   flex: 1 1 auto;
-  min-height: 180px;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .chart-main {
   width: 100%;
-  height: 100%;
-  flex: 1 1 auto;
-  min-height: 180px;
+  flex: 0 0 auto;
+  min-height: var(--ql-chart-min-main);
+  max-height: 100%;
 }
 
 .volume-profile {

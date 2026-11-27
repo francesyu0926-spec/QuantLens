@@ -36,6 +36,9 @@ interface Props {
   noviceMode?: boolean;
   noviceTourPaper?: boolean;
   onNoviceTourPaperSeen?: () => void;
+  onNovicePracticePreview?: (
+    preview: { stop: number; takeProfit: number; shares: number } | null
+  ) => void;
 }
 
 export function RightDock({
@@ -59,6 +62,7 @@ export function RightDock({
   noviceMode = false,
   noviceTourPaper = false,
   onNoviceTourPaperSeen,
+  onNovicePracticePreview,
 }: Props) {
   const [tab, setTab] = useState<Tab>("signals");
   const [maxLossYuan, setMaxLossYuan] = useState(500);
@@ -137,6 +141,27 @@ export function RightDock({
     const shares = Math.max(step, Math.floor(raw / step) * step);
     return { stopPx, shares, riskPerShare };
   }, [entry, price, supportPrice, maxLossYuan]);
+
+  useEffect(() => {
+    if (!noviceMode || tab !== "position" || !novicePaperPlan) {
+      onNovicePracticePreview?.(null);
+      return;
+    }
+    const e = Number(entry) || price;
+    const takeProfit = e + (e - novicePaperPlan.stopPx) * 2.5;
+    onNovicePracticePreview?.({
+      stop: novicePaperPlan.stopPx,
+      takeProfit,
+      shares: novicePaperPlan.shares,
+    });
+  }, [
+    noviceMode,
+    tab,
+    novicePaperPlan,
+    entry,
+    price,
+    onNovicePracticePreview,
+  ]);
 
   const loadDepth = async () => {
     if (!symbol.includes("/")) return;

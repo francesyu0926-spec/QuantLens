@@ -46,7 +46,11 @@ import { useNoviceAssist } from "./hooks/useNoviceAssist";
 import { useWatchlistEmaSignals } from "./hooks/useWatchlistEmaSignals";
 import { MarketBriefBanner } from "./components/MarketBriefBanner";
 import { NoviceOnboardingTour } from "./components/NoviceOnboardingTour";
-import { plainPriceLineTitle } from "./utils/noviceCopy";
+import {
+  NOVICE_CHART_STOP_LINE,
+  NOVICE_CHART_TAKE_LINE,
+  plainPriceLineTitle,
+} from "./utils/noviceCopy";
 import { DEFAULT_SYMBOL } from "./config/market";
 import { resolveAShareDisplayName } from "./config/aShareDisplayNames";
 import {
@@ -266,6 +270,12 @@ export default function App() {
   const proChartSnapshot = useRef<ChartDisplayOptions | null>(null);
   const proLayoutSnapshot = useRef<ChartLayoutMode | null>(null);
   const [noviceTourPaper, setNoviceTourPaper] = useState(false);
+  const [noviceMarkPriceMode, setNoviceMarkPriceMode] = useState(false);
+  const [novicePracticePreview, setNovicePracticePreview] = useState<{
+    stop: number;
+    takeProfit: number;
+    shares: number;
+  } | null>(null);
   const showNoviceTour = noviceMode && !onboardingDone;
 
   const applyChartLayout = useCallback(
@@ -282,6 +292,7 @@ export default function App() {
     addLine,
     removeLine,
     toggleLineAlert,
+    clearLines,
   } = usePriceLines(symbol);
   const { entries: journalEntries, addEntry: addJournalEntry } =
     useTradingJournal();
@@ -336,7 +347,9 @@ export default function App() {
   const prevLiveCount = useRef(0);
 
   useEffect(() => {
-    void bootstrapUserDataSync();
+    void bootstrapUserDataSync().then(() => {
+      window.dispatchEvent(new Event("quantlens-userdata-synced"));
+    });
   }, []);
 
   useEffect(() => {
@@ -369,6 +382,19 @@ export default function App() {
       proLayoutSnapshot.current = null;
     }
   }, [noviceMode]);
+
+  useEffect(() => {
+    if (!noviceMode) setNoviceMarkPriceMode(false);
+  }, [noviceMode]);
+
+  useEffect(() => {
+    if (!noviceMarkPriceMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setNoviceMarkPriceMode(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [noviceMarkPriceMode]);
 
   useEffect(() => {
     try {
@@ -591,8 +617,20 @@ export default function App() {
         color: "#3B82F6",
       });
     }
+    if (noviceMode && novicePracticePreview) {
+      lines.push({
+        price: novicePracticePreview.stop,
+        title: NOVICE_CHART_STOP_LINE,
+        color: "#ef4444",
+      });
+      lines.push({
+        price: novicePracticePreview.takeProfit,
+        title: NOVICE_CHART_TAKE_LINE,
+        color: "#22c55e",
+      });
+    }
     return lines;
-  }, [displayCandles, effectivePrice, noviceMode]);
+  }, [displayCandles, effectivePrice, noviceMode, novicePracticePreview]);
 
   useEffect(() => {
     const px = effectivePrice;
@@ -819,6 +857,7 @@ export default function App() {
               quotes={quotes}
               screenerActive={screenerSymbols != null}
               onScreenerResult={setScreenerSymbols}
+              noviceMode={noviceMode}
             />
             </>
           )}
@@ -846,11 +885,14 @@ export default function App() {
             lines={priceLines}
             onAddLine={addLine}
             onRemoveLine={removeLine}
+            onClearAllLines={clearLines}
             onToggleLineAlert={toggleLineAlert}
             intradayMode={intradayMode}
             onIntraday={setIntradayMode}
             noviceMode={noviceMode}
             chartLayout={chartLayout}
+            markPriceMode={noviceMarkPriceMode}
+            onMarkPriceModeChange={setNoviceMarkPriceMode}
           />
           {noviceMode && displayCandles.length > 0 && (
             <MarketBriefBanner
@@ -898,6 +940,7 @@ export default function App() {
                   onAddPriceLine={(p) => addLine(p, "关键价位")}
                   patternMarkers={patternMarkers}
                   autoPriceLines={autoPriceLines}
+                  markPriceMode={noviceMarkPriceMode}
                   activePane={multiActivePane}
                   onActivePaneChange={setMultiActivePane}
                   dualIv={dualPaneIv}
@@ -967,6 +1010,7 @@ export default function App() {
               noviceMode={noviceMode}
               noviceTourPaper={noviceTourPaper}
               onNoviceTourPaperSeen={() => setNoviceTourPaper(false)}
+              onNovicePracticePreview={setNovicePracticePreview}
             />
           )}
         </aside>

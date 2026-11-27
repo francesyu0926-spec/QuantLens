@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AlertRules } from "../hooks/useAlertRules";
 import {
   PRICE_COLOR_MODE_LABEL,
@@ -50,16 +50,33 @@ function M3Switch({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <div className="settings-switch-row">
+    <button
+      type="button"
+      className="settings-switch-row"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+    >
       <span className="settings-switch-label">{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        className={`m3-switch${checked ? " on" : ""}`}
-        onClick={() => onChange(!checked)}
+      <span
+        className={`m3-switch-visual${checked ? " on" : ""}`}
+        aria-hidden
       />
-    </div>
+    </button>
+  );
+}
+
+function SettingsGhostBtn({
+  children,
+  onClick,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className="settings-ghost-btn" onClick={onClick}>
+      {children}
+    </button>
   );
 }
 
@@ -120,14 +137,23 @@ export function AlertSettings({
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose} role="presentation">
+    <div
+      className="modal-backdrop settings-backdrop"
+      onClick={onClose}
+      role="presentation"
+    >
       <section
         className="alert-modal settings-modal"
         onClick={(e) => e.stopPropagation()}
         aria-label="系统设置"
       >
         <header className="settings-modal-header">
-          <h3 className="settings-modal-title">系统设置</h3>
+          <div className="settings-modal-title-row">
+            <span className="settings-modal-ico" aria-hidden>
+              ⚙
+            </span>
+            <h3 className="settings-modal-title">系统设置</h3>
+          </div>
           <button
             type="button"
             className="settings-close-btn"
@@ -138,9 +164,13 @@ export function AlertSettings({
           </button>
         </header>
 
+        <div className="settings-modal-body">
         <div className="settings-card">
-          <h4 className="settings-card-title">外观与显示</h4>
-          <p className="settings-card-hint muted">涨跌配色</p>
+          <h4 className="settings-card-title">
+            <span className="settings-card-accent" aria-hidden />
+            外观与显示
+          </h4>
+          <p className="settings-card-hint">涨跌配色</p>
           <div
             className="settings-color-segment"
             role="radiogroup"
@@ -168,14 +198,19 @@ export function AlertSettings({
 
         <div className="settings-card">
           <h4 className="settings-card-title">
+            <span className="settings-card-accent" aria-hidden />
             {noviceMode ? "涨跌提醒（白话）" : "策略预警条件"}
           </h4>
           {noviceMode && (
-            <p className="settings-card-hint muted">
+            <p className="settings-card-hint">
               以下为同一套规则的白话说明，开关仍按原逻辑生效。
             </p>
           )}
-          <div className="settings-rule-grid">
+          <div
+            className={`settings-rule-grid${
+              noviceMode ? " settings-rule-grid--stack" : ""
+            }`}
+          >
             <M3Switch
               label={
                 noviceMode
@@ -225,14 +260,15 @@ export function AlertSettings({
         </div>
 
         <div className="settings-card">
-          <h4 className="settings-card-title">数据备份</h4>
-          <p className="settings-card-hint muted">
+          <h4 className="settings-card-title">
+            <span className="settings-card-accent" aria-hidden />
+            数据备份
+          </h4>
+          <p className="settings-card-hint">
             导出/恢复自选、模拟持仓、复盘笔记、画线与预警配置（JSON）
           </p>
           <div className="settings-backup-actions">
-            <button
-              type="button"
-              className="chip"
+            <SettingsGhostBtn
               onClick={() => {
                 downloadUserDataBackup();
                 setBackupMsg("已下载备份文件");
@@ -240,14 +276,10 @@ export function AlertSettings({
               }}
             >
               导出全部数据
-            </button>
-            <button
-              type="button"
-              className="chip"
-              onClick={() => importRef.current?.click()}
-            >
+            </SettingsGhostBtn>
+            <SettingsGhostBtn onClick={() => importRef.current?.click()}>
               从备份恢复
-            </button>
+            </SettingsGhostBtn>
             <input
               ref={importRef}
               type="file"
@@ -270,36 +302,38 @@ export function AlertSettings({
               }}
             />
           </div>
-          {backupMsg && (
-            <p className="settings-card-hint muted">{backupMsg}</p>
-          )}
+          {backupMsg && <p className="settings-card-hint">{backupMsg}</p>}
           <div className="settings-backup-actions">
-            <button
-              type="button"
-              className="chip"
-              onClick={() => downloadCsv("/export/trades.csv", "quantlens-trades.csv")}
+            <SettingsGhostBtn
+              onClick={() =>
+                downloadCsv("/export/trades.csv", "quantlens-trades.csv")
+              }
             >
               导出模拟成交 CSV
-            </button>
-            <button
-              type="button"
-              className="chip"
+            </SettingsGhostBtn>
+            <SettingsGhostBtn
               onClick={() =>
                 downloadCsv("/export/journal.csv", "quantlens-journal.csv")
               }
             >
               导出复盘笔记 CSV
-            </button>
+            </SettingsGhostBtn>
           </div>
-          <p className="settings-card-hint muted">
+          <p className="settings-card-hint">
             SQLite 已同步的数据可在其他设备通过「从备份恢复」或自动拉取对齐
           </p>
         </div>
 
         <div className="settings-card">
           <h4 className="settings-card-title">
+            <span className="settings-card-accent" aria-hidden />
             {noviceMode ? "怎么通知我" : "通知与推送"}
           </h4>
+          <div
+            className={`settings-rule-grid${
+              noviceMode ? " settings-rule-grid--stack" : ""
+            }`}
+          >
           <M3Switch
             label={
               noviceMode ? NOVICE_NOTIFY_LABELS.sound : "触发时播放提示音"
@@ -332,6 +366,7 @@ export function AlertSettings({
             checked={rules.paperAutoOnSignal}
             onChange={(v) => onChange({ ...rules, paperAutoOnSignal: v })}
           />
+          </div>
           {rules.webhookEnabled && (
             <div className="settings-webhook-block">
               <label className="settings-webhook-field">
@@ -362,6 +397,7 @@ export function AlertSettings({
               </label>
             </div>
           )}
+        </div>
         </div>
       </section>
     </div>

@@ -1,5 +1,6 @@
 import type { CapitalFlowSnapshot } from "../hooks/useFundamentals";
 import type { Candle } from "../types/market";
+import type { ScreenerPresetId } from "./screener";
 import { computeHealthScore } from "./marketHealthScore";
 
 export type TrafficLight = "sunny" | "cloudy" | "rainy";
@@ -22,6 +23,8 @@ export function plainPriceLineTitle(title: string): string {
     return "涨到这里可能遇压";
   if (title === "止损") return "亏损警戒线";
   if (title === "止盈") return "盈利目标线";
+  if (title === "现价" || title === "当前价") return "当前价";
+  if (title === "关键价位") return "自选价位";
   return title;
 }
 
@@ -94,6 +97,35 @@ export const NOVICE_NOTIFY_LABELS = {
 } as const;
 
 export const NOVICE_INTERVALS = ["1m", "5m", "15m", "1d"] as const;
+
+export const NOVICE_CHART_STOP_LINE = "跌到这里可能止损";
+export const NOVICE_CHART_TAKE_LINE = "涨到这里可能止盈";
+
+export const NOVICE_SCREENER_COPY: Record<
+  ScreenerPresetId,
+  { title: string; hint: string; chip: string }
+> = {
+  momentum: {
+    title: "今日涨幅偏大",
+    chip: "> 3%",
+    hint: "按实时涨跌幅筛选，约 3% 以上",
+  },
+  oversold: {
+    title: "短线跌得较多",
+    chip: "超跌",
+    hint: "情绪偏冷，或有反弹机会",
+  },
+  macd_cross: {
+    title: "动能由弱转强",
+    chip: "转暖",
+    hint: "近两日趋势变暖",
+  },
+  above_ema20: {
+    title: "价格在短期均线之上",
+    chip: "均线",
+    hint: "走势相对偏强",
+  },
+};
 
 export function buildNovicePlainSentence(
   candles: Candle[],

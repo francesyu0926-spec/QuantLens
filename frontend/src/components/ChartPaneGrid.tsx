@@ -60,6 +60,7 @@ interface Props {
   /** 主图展示的是缓存/延迟数据（全局异常时边框变警告色） */
   primaryStale?: boolean;
   noviceMode?: boolean;
+  markPriceMode?: boolean;
 }
 
 export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function ChartPaneGrid({
@@ -91,6 +92,7 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
   paneReloadToken = 0,
   primaryStale = false,
   noviceMode = false,
+  markPriceMode = false,
 }, ref) {
   const globalMarketFault =
     Boolean(marketBlockReason) && (marketBlocked || globalErrorBanner);
@@ -207,6 +209,7 @@ export const ChartPaneGrid = forwardRef<ChartWorkspaceHandle, Props>(function Ch
             patternMarkers={patternMarkers}
             autoPriceLines={autoPriceLines}
             cacheDelayed={primaryStale}
+            priceMarkMode={noviceMode && markPriceMode}
           />
         ) : (
           <div className="chart-pane-empty muted">加载 K 线…</div>

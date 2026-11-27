@@ -61,6 +61,8 @@ interface Props {
   autoPriceLines?: { price: number; title: string; color?: string }[];
   /** 并入 OHLC 行：缓存/延迟提示（不占悬浮角标） */
   cacheDelayed?: boolean;
+  /** 小白点图标记模式（单击主图添加价位线，无需 Alt） */
+  priceMarkMode?: boolean;
 }
 
 export interface ChartWorkspaceHandle {
@@ -146,6 +148,38 @@ function toLineData(
     .filter(Boolean) as LineData<Time>[];
 }
 
+/** 从 flex 父级读取可用高度，避免用 shell 自身高度造成 ResizeObserver 正反馈撑高 */
+function measureChartBudget(
+  shell: HTMLElement | null,
+  compact: boolean
+): number {
+  const minMain = compact ? 140 : 200;
+  const fallback = compact ? 280 : 400;
+  const hardCap = Math.floor(window.innerHeight * 0.58);
+  if (!shell) return Math.min(fallback, hardCap);
+
+  const area = shell.closest(".chart-area");
+  const stack = shell.closest(".chart-stack");
+  if (area instanceof HTMLElement && stack instanceof HTMLElement) {
+    const areaRect = area.getBoundingClientRect();
+    const stackTop = stack.getBoundingClientRect().top;
+    const budget = areaRect.bottom - stackTop - 6;
+    if (budget >= minMain) {
+      return Math.min(Math.floor(budget), hardCap);
+    }
+  }
+
+  const anchor =
+    shell.closest(".chart-stack-body") ?? shell.closest(".chart-stack");
+  if (anchor instanceof HTMLElement) {
+    const h = anchor.getBoundingClientRect().height;
+    if (h >= minMain && h < window.innerHeight * 0.85) {
+      return Math.min(Math.floor(h), hardCap);
+    }
+  }
+  return Math.min(fallback, hardCap);
+}
+
 export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
   function ChartWorkspace(
     {
@@ -168,6 +202,7 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
       patternMarkers = [],
       autoPriceLines = [],
       cacheDelayed = false,
+      priceMarkMode = false,
     },
     ref
   ) {
@@ -200,6 +235,8 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
   const macdHistRef = useRef<number[]>([]);
   const priceLineHandles = useRef<IPriceLine[]>([]);
   const altKey = useRef(false);
+  const priceMarkModeRef = useRef(priceMarkMode);
+  const lastResizeRef = useRef({ w: 0, mainH: 0, subH: 0 });
   const addLineRef = useRef(onAddPriceLine);
   const crosshairRef = useRef(onCrosshairTime);
   const paneIdRef = useRef(paneId);
@@ -207,6 +244,7 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
   addLineRef.current = onAddPriceLine;
   crosshairRef.current = onCrosshairTime;
   paneIdRef.current = paneId;
+  priceMarkModeRef.current = priceMarkMode;
 
   const closes = useMemo(() => candles.map((c) => c.close), [candles]);
   const ema20 = useMemo(() => ema(closes, 20), [closes]);
@@ -354,22 +392,38 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
   const resizeCharts = () => {
     const shell = shellRef.current;
     const parent = shell?.parentElement;
-    const total =
-      shell?.clientHeight ||
-      parent?.clientHeight ||
-      (compact ? 280 : 420);
+    const total = measureChartBudget(shell, compact);
     const hideSub = hideSubChart;
     const ratio = hideSub ? 1 : compact ? 0.82 : 0.74;
-    const mainH = Math.max(
+    let mainH = Math.max(
       compact ? 140 : 200,
       Math.floor(total * ratio)
     );
-    const subH = hideSub ? 0 : Math.max(compact ? 56 : 72, total - mainH);
+    let subH = hideSub
+      ? 0
+      : Math.max(compact ? 56 : 72, total - mainH);
+    if (!hideSub && mainH + subH > total) {
+      subH = Math.max(compact ? 56 : 72, total - mainH);
+    }
+    if (hideSub) {
+      mainH = Math.min(mainH, total);
+    }
     const w =
-      shell?.clientWidth || parent?.clientWidth || window.innerWidth * 0.45;
+      shell?.clientWidth ||
+      parent?.clientWidth ||
+      Math.floor(window.innerWidth * 0.45);
+    const prev = lastResizeRef.current;
+    if (
+      Math.abs(w - prev.w) < 2 &&
+      Math.abs(mainH - prev.mainH) < 2 &&
+      Math.abs(subH - prev.subH) < 2
+    ) {
+      return;
+    }
+    lastResizeRef.current = { w, mainH, subH };
     if (mainRef.current) mainRef.current.style.height = `${mainH}px`;
     if (subRef.current) {
-      subRef.current.style.height = `${subH}px`;
+      subRef.current.style.height = hideSub ? "0px" : `${subH}px`;
       subRef.current.style.display = hideSub ? "none" : "block";
     }
     mainChart.current?.applyOptions({ width: w, height: mainH });
@@ -577,10 +631,20 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
       }
     });
 
+    const resizeTarget =
+      shellRef.current?.closest(".chart-stack-body") ??
+      shellRef.current?.closest(".chart-stack") ??
+      shellRef.current;
     const ro = new ResizeObserver(() => resizeCharts());
-    if (shellRef.current) ro.observe(shellRef.current);
+    if (resizeTarget) ro.observe(resizeTarget);
     main.subscribeClick((param) => {
-      if (!altKey.current || !param.point || !candles_s) return;
+      if (
+        (!altKey.current && !priceMarkModeRef.current) ||
+        !param.point ||
+        !candles_s
+      ) {
+        return;
+      }
       const p = candles_s.coordinateToPrice(param.point.y);
       if (p != null) addLineRef.current?.(p as number);
     });
@@ -624,6 +688,13 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
     if (!chartReady) return;
     requestAnimationFrame(() => resizeCharts());
   }, [chartReady, candles.length, compact, hideSubChart]);
+
+  useEffect(() => {
+    if (!chartReady) return;
+    const onWin = () => requestAnimationFrame(() => resizeCharts());
+    window.addEventListener("resize", onWin);
+    return () => window.removeEventListener("resize", onWin);
+  }, [chartReady]);
 
   useEffect(() => {
     if (!chartReady || !candleSeries.current) return;
@@ -824,9 +895,14 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
         price: line.price,
         title: line.title.replace(/\s[\d.]+$/, "").trim() || line.title,
         color:
-          line.title.startsWith("阻")
-            ? REF_LINE_COLORS.resistance
-            : REF_LINE_COLORS.support,
+          line.color ??
+          (line.title.includes("止损") || line.title.includes("止跌")
+            ? REF_LINE_COLORS.stop
+            : line.title.includes("止盈") || line.title.includes("遇压")
+              ? REF_LINE_COLORS.take
+              : line.title.startsWith("阻")
+                ? REF_LINE_COLORS.resistance
+                : REF_LINE_COLORS.support),
         priority: 30,
       })),
       ...priceLines.map((line) => ({
@@ -878,7 +954,7 @@ export const ChartWorkspace = forwardRef<ChartWorkspaceHandle, Props>(
     <div
       className={`chart-workspace${compact ? " is-compact" : ""}${
         hideSubChart ? " no-subchart" : ""
-      }`}
+      }${priceMarkMode ? " chart-mark-price" : ""}`}
       ref={shellRef}
       onMouseLeave={() => {
         setLegendHover(false);

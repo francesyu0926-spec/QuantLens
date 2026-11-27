@@ -36,6 +36,24 @@ export const SCREENER_PRESETS: {
   },
 ];
 
+/** 条件标题中的技术参数，用于弹窗高亮 */
+export const SCREENER_PARAM_CHIPS: Record<ScreenerPresetId, string> = {
+  momentum: "> 3%",
+  oversold: "< 30",
+  macd_cross: "金叉",
+  above_ema20: "EMA20",
+};
+
+export const SCREENER_TITLE_PARTS: Record<
+  ScreenerPresetId,
+  { title: string; chip: string }
+> = {
+  momentum: { title: "涨幅", chip: "> 3%" },
+  oversold: { title: "RSI(14)", chip: "< 30" },
+  macd_cross: { title: "MACD", chip: "金叉" },
+  above_ema20: { title: "收盘站上", chip: "EMA20" },
+};
+
 function matchMomentum(symbol: string, quotes: QuoteMap): boolean {
   const q = quotes[symbol];
   return (q?.changePct ?? 0) > 3;
